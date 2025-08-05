@@ -1,0 +1,55 @@
+.app-container {
+    width: 293pt;
+    height: 519pt;
+    background-color: #000000;
+  }
+
+  .image-button {
+    border: none;
+    color: 841584;
+    width: 101.87; 
+    height: 73;
+  }
+
+  .button4 {
+    display: inline-flex;
+    background-color: #0255A5;
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 90pt; 
+    height: 73pt;
+    box-shadow: 0px 2px 2px lightgray;
+    transition: 'background-color 0.2s';
+    justify-content: center;
+    align-items: center;
+  }
+  .button1 {
+    display: inline-flex;
+    background-color: green;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    height: 0pt;
+    box-shadow: 0px 2px 2px lightgray;
+    transition: 'background-color 0.2s';
+    justify-content: center;
+    align-items: center;
+  }
+
+  button {
+    padding: 10px 20px;
+    margin: 5px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  
+  button.active {
+    background-color: red;
+  }
+  

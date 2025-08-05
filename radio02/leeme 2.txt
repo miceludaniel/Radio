@@ -1,0 +1,22 @@
+Todo va en
+/Users/danielMac/ws/workspace/radio02
+
+radio02 tiene dos directorios importantes: cliente y servidor
+
+ejecutar nvm use 24.4.1 en el directorio y los dos subdirectorios
+radio02 nvm use 24.4.1
+radio02/cliente nvm use 24.4.1
+radio02/servidor nvm use 24.4.1
+
+para ejecutar el programa, hacerlo en los dos directorios:
+radio02/cliente npm start
+radio02/servidor npm start
+
+Poner la dirección IP de la máquina en /radio02/cliente/src/App.js
+
+"const puerto = 'http://192.168.1.7:3000/enviar-dato';"
+
+Poner la dirección del puerto comm serial en /radio02/servidor/index.js
+
+const portcom = new SerialPort({
+path: '/dev/tty.usbserial-1430',
