@@ -4,6 +4,9 @@ const app = express();
 const port = 3000;
 const fs = require('fs');
 const { SerialPort } = require('serialport');
+const USBRelay = require("@josephdadams/usbrelay");
+//const relay = new USBRelay('DevSrvsID:4297844027');
+const relay = new USBRelay();
 
 const portcom = new SerialPort({
   path: '/dev/tty.usbserial-1430',
@@ -35,6 +38,70 @@ app.post('/enviar-dato', (req, res) => {
   const retorno = '\r\n';
 
 //********************* *
+
+function signalStrength() {
+    let sendCommand = '';
+    let retorno = '\r\n'; 
+    let vuelta= 0;
+   sendCommand = "I1?";
+   sendCommand = sendCommand.replace(/[\'"]+/g, '') + retorno;
+
+   portcom.write(sendCommand);
+
+    setTimeout(() => {
+      console.log('primero');
+    }, 500);
+    portcom.write(sendCommand);
+    setTimeout(() => {
+      console.log('segundo');
+    }, 500);
+    let respuesta = portcom.read();
+    if (respuesta === null || respuesta === undefined) {
+      console.log('No hay datos disponibles del puerto serial');
+      return;
+    }
+
+   const intervalId = setInterval(() => {
+   portcom.write(sendCommand, (err) => {
+     if (err) {
+       return console.error('Error al escribir en el puerto:', err.message);
+     }
+    let respuesta = portcom.read();
+    let respuesta1 = respuesta;
+    if (respuesta1 === null || respuesta1 === undefined) {
+      return; // Salir si no hay datos
+    }
+    
+               //console.log (respuesta); 
+     
+               let buf = Buffer.from(respuesta);
+               respuesta = buf.toString();
+               let respuesta2 = parseInt(respuesta.substring(3,4),16);
+               let respuesta3 = parseInt(respuesta.substring(4,5),16);
+               const respuesta4 = respuesta2 * 16 + respuesta3;
+               console.log(respuesta4);
+   
+               const sendComandd1 = respuesta4;
+               const configJSON1 = JSON.stringify(sendComandd1, null, 2); 
+               let rutaenvio1 = '/Users/danielMac/ws/workspace/radio02/config/signalStrength.json';
+              fs.writeFileSync(rutaenvio1, configJSON1, 'utf8', (err) => {
+               if (err) {
+                 console.error('Error al escribir en el archivo:', err);
+                  return;
+              }
+              }
+            );
+
+                let rutaenvio = '/Users/danielMac/ws/workspace/radio02/config/envio.json';
+                let apagado= fs.readFileSync(rutaenvio, 'utf-8');
+                apagado= apagado.replace(/[\'"]+/g, '') ;
+                if (apagado === 'H100') {
+                 clearInterval(intervalId);
+                }
+   });
+  }, 500);
+ }
+
 function enviar() {
   let sendCommand = '';
   const rutaenvio = '/Users/danielMac/ws/workspace/radio02/config/envio.json';
@@ -321,6 +388,12 @@ function datosDisplay() {
   const rutaffrequency = '/Users/danielMac/ws/workspace/radio02/config/ffrequency.json';
   const ffrequency = fs.readFileSync(rutaffrequency, 'utf-8');
 
+  const rutasignalStrength = '/Users/danielMac/ws/workspace/radio02/config/signalStrength.json';
+  const signalStrength = fs.readFileSync(rutasignalStrength, 'utf-8');
+
+  const rutagrado = '/Users/danielMac/ws/workspace/radio02/config/grados.json';
+  let grados = fs.readFileSync(rutagrado, 'utf-8');
+
   let tuningStepd ='nada'
   if (tuningStep === "1") {
     tuningStepd = "1 Hz";
@@ -459,7 +532,7 @@ let ffrequencyd3=ffrequencyd.substr(4, 3);
 let ffrequencyd4=ffrequencyd.substr(7, 3);
 ffrequencyd = ffrequencyd1 + "." + ffrequencyd2 + "," + ffrequencyd3 + "." + ffrequencyd4;
 const spaces = 'vol: '.padStart(19, "\ \ ");
-  res.json({ dato: ffrequencyd +' Mhz'+ ' ' + modulado + ' w:' + wided + ' ts:' + tuningStepd + "&"  + afcc + ' ' + agcc + ' ' + attc + ' ' + nbc  + spaces +  volume + ' >=>  ' + '(' + dato + ')' });
+  res.json({ dato: ffrequencyd +' Mhz'+ ' ' + modulado + ' w:' + wided + ' ts:' + tuningStepd + "&"  + afcc + ' ' + agcc + ' ' + attc + ' ' + nbc  + spaces +  volume + '  ' + signalStrength + '  ' + grados + 'º' +  '  ' + '(' + dato.substring(4) + ')' });
 }
 //****************************************** */
 function setVolume() {
@@ -587,7 +660,9 @@ function TuneIn() {
     enviar();
 }
 //****************************************** */
-  switch (dato) {
+const datonum = dato.substring(0,4);
+const datodato = dato.substring(4);
+  switch (datodato) {
   case 'freq_do-1': {
     const rutatuningStep = '/Users/danielMac/ws/workspace/radio02/config/tuningStep.json';
     let tuningStepd =''
@@ -894,6 +969,7 @@ case 'ancho_up-1':{
       setNB();
       TuneIn();
      datosDisplay();
+     signalStrength();
      break;}
 //****************************************** */
   case 'volume_do-1': {
@@ -1027,35 +1103,78 @@ case 'ancho_up-1':{
     break; }
 //************************************************************** */ 
   default: {
-    let punto = dato.indexOf(".");
-    let largo = dato.length;
-    let resto = largo - punto - 1;
-    let ffrequencyd1=dato.slice(0,punto);
-    let ffrequencyd2=dato.slice(-resto);
-    let ffrequencyd = ffrequencyd1.toString().padStart(4, '0')  + ffrequencyd2.toString().padEnd(6, '0');
+    const rutagrados = '/Users/danielMac/ws/workspace/radio02/config/grados.json';
+    let grados ='';
+    if (datonum === 'frec'){
+      let punto = datodato.indexOf(".");
+      let largo = datodato.length;
+      let resto = largo - punto - 1;
+      let ffrequencyd1=datodato.slice(0,punto);
+      let ffrequencyd2=datodato.slice(-resto);
+      let ffrequencyd = ffrequencyd1.toString().padStart(4, '0')  + ffrequencyd2.toString().padEnd(6, '0');
     
     
-    const ffrequencyN = Number(ffrequencyd);
-    if (ffrequencyN > 1300000000) {
-      ffrequencyd ="0000100000";
-      //const ffrequency = Number(ffrequencyd);
+      const ffrequencyN = Number(ffrequencyd);
+      if (ffrequencyN > 1300000000) {
+        ffrequencyd ="0000100000";
+        //const ffrequency = Number(ffrequencyd);
+      }
+      if (ffrequencyN < 100000) {
+        ffrequencyd ="1300000000";
+      }
+     if (punto === -1) {
+        ffrequencyd ="0000100000";
+     }
+     const ffrequency = Number(ffrequencyd);
+     const configJSON = JSON.stringify(ffrequency, null, 2); 
+     const rutaffrequency = '/Users/danielMac/ws/workspace/radio02/config/ffrequency.json';
+     fs.writeFileSync(rutaffrequency, configJSON, 'utf8', (err) => {
+        if (err) {
+        console.error('Error al escribir en el archivo:', err);
+         return;
+       }});
+     estaEnRango();
+     TuneIn();
+
+    } else {
+    let grados = fs.readFileSync(rutagrados, 'utf-8');
+    let grados2 = grados * 1;
+    let datodato2 = datodato * 1;
+    let grados1 = grados2 + datodato2;
+
+
+    if (grados1 > 360) {
+      datodato2 = 360 - grados2;
+      grados2 = 360;
+    } else {
+        if (grados1 < 0){
+          datodato2 = grados2 * (-1);
+          grados2 = 0;
+        } else {
+          grados2 = grados1;
+        }
     }
-    if (ffrequencyN < 100000) {
-      ffrequencyd ="1300000000";
-    }
-    if (punto === -1) {
-      ffrequencyd ="0000100000";
-    }
-    const ffrequency = Number(ffrequencyd);
-    const configJSON = JSON.stringify(ffrequency, null, 2); 
-    const rutaffrequency = '/Users/danielMac/ws/workspace/radio02/config/ffrequency.json';
-    fs.writeFileSync(rutaffrequency, configJSON, 'utf8', (err) => {
-      if (err) {
+
+    const configJSON = JSON.stringify(grados2, null, 2); 
+    fs.writeFileSync(rutagrados, configJSON, 'utf8', (err) => {
+       if (err) {
        console.error('Error al escribir en el archivo:', err);
         return;
       }});
-    estaEnRango();
-    TuneIn();
+
+    if (datodato2 > 0) {
+      relay.setState(0, true);
+      setTimeout(function () {
+          relay.setState(0, false);
+      }, grados2 * 1000);
+    } else {
+      relay.setState(1, true);
+      setTimeout(function () {
+          relay.setState(1, false);
+      }, grados2 * 1000);
+     }
+    }
+
     datosDisplay();
     break; 
   }

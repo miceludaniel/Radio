@@ -44,7 +44,10 @@ function App() {
 
   const [color, setColor] = useState('white');
 
-  const [dato, setDato] = useState('');
+  //const [dato, setDato] = useState('');
+
+    const [input1, setInput1] = useState('');
+    const [input2, setInput2] = useState('');
 
   //const puerto = 'http://localhost:3000/enviar-dato';
   const puerto = 'http://192.168.1.3:3000/enviar-dato';
@@ -58,7 +61,8 @@ function App() {
   };
 
 
-  const handleSubmit = (event) => {
+  const handleSubmit1 = (event) => {
+ const dato = 'frec' + input1;
       event.preventDefault();
     axios
     .post(puerto, { dato })
@@ -70,6 +74,19 @@ function App() {
     });
   };
   
+  const handleSubmit2 = (event) => {
+ const dato = 'grad' + input2;
+    event.preventDefault();
+  axios
+  .post(puerto, { dato })
+  .then(response => {
+    setDatoRecibido(response.data.dato );
+  })
+  .catch(error => {
+    console.error('Error al enviar el dato:', error);
+  });
+};
+
   const enviarDatos = (dato) => {
     axios.post(puerto, { dato })
     .then(response => {
@@ -98,79 +115,91 @@ let ffrequencyd2=datoRecibido.slice(-resto);
 
     <div className="col-md-5" key={buttons}>
 
-      <button key={1} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('freq_do-1')}>
+      <button key={1} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('nullfreq_do-1')}>
        Frecuencia -
       </button>
       
-      <button key={2} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('freq_up-1')}>
+      <button key={2} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('nullfreq_up-1')}>
        Frecuencia +
       </button>
       
-      <button key={3} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('AFC-1')}>
+      <button key={3} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullAFC-1')}>
        AFC
       </button>
 
-      <button key={4} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('ancho_do-1')}>
+      <button key={4} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullancho_do-1')}>
        Ancho -
       </button>
 
-      <button key={5} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('ancho_up-1')}}>
+      <button key={5} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullancho_up-1')}}>
        Ancho +
       </button>
 
-      <button key={6} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('AGC-1')}}>
+      <button key={6} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullAGC-1')}}>
        AGC
       </button>
 
-      <button key={7} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('step_do-1')}}>
+      <button key={7} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullstep_do-1')}}>
        Salto -
       </button>
 
-      <button key={8} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('step_up-1')}}>
+      <button key={8} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullstep_up-1')}}>
        Salto +
       </button>
 
-      <button key={9} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('ATT-1')}}>
+      <button key={9} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullATT-1')}}>
        ATT
       </button>
 
-      <button key={10} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('volume_do-1')}}>
+      <button key={10} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullvolume_do-1')}}>
        Volumen -
       </button>
 
-      <button key={11} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('volume_up-1')}}>
+      <button key={11} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullvolume_up-1')}}>
       Volumen +
       </button>
 
-      <button key={12} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('NB-1')}>
+      <button key={12} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullNB-1')}>
        NB
       </button>
 
-      <button key={13} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('modulacion')}}>
+      <button key={13} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullmodulacion')}}>
        Modulación
       </button>
 
-      <button key={14} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('encendido') }}>
+      <button key={14} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullencendido') }}>
        Encendido
       </button>
 
-      <button key={15} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('apagado')}>
+      <button key={15} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullapagado')}>
        Apagado
       </button>
       
     </div>
-    <form onSubmit={handleSubmit}>
+    <form> 
      <label>
       <input 
+        name = "frecuencia"
         type = "number"
-        value = { dato }
+        value = {input1}
         pattern="[0-9]{0,10}"
-        onChange = {(e) => setDato(e.target.value)}
+        onChange = {(e) => setInput1(e.target.value)}
       />
      </label>
-     <button type="submit" className={"button1"} >MHz</button>
+     <button type="submit" className={"button1"} onClick={handleSubmit1} >MHz</button>
      <button className={"button1"} onClick={() => setIsRecording(!isRecording)}>
         {isRecording ? 'No audio' : 'audio'}</button>
+
+        <label>
+      <input 
+        name = 'grados'
+        type = "number"
+        value = { input2 } 
+        pattern="[0-9]{0,10}"
+        onChange = {(e) => setInput2(e.target.value)}
+      />
+     </label>
+     <button type="submit" className={"button1"} onClick={handleSubmit2} >Grados</button>
     </form>
   </div>
   );
