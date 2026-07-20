@@ -8,9 +8,13 @@ const DESIGN_WIDTH = 293 * (4 / 3);
 const DESIGN_HEIGHT = 519 * (4 / 3);
 
 function getFitScale() {
+  // visualViewport refleja el alto real visible en Safari/iOS (descuenta
+  // la barra de herramientas); window.innerHeight ahí puede ser más alto.
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
   return Math.min(
-    window.innerWidth / DESIGN_WIDTH,
-    window.innerHeight / DESIGN_HEIGHT,
+    viewportWidth / DESIGN_WIDTH,
+    viewportHeight / DESIGN_HEIGHT,
     1
   );
 }
@@ -53,9 +57,11 @@ function App() {
     const handleResize = () => setScale(getFitScale());
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
+    window.visualViewport?.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
+      window.visualViewport?.removeEventListener('resize', handleResize);
     };
   }, []);
 
