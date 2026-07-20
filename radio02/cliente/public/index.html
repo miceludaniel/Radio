@@ -1,6 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      // Brave (y otras billeteras de navegador) inyectan un script global que
+      // define window.ethereum y a veces falla antes de que cargue la app.
+      // Ese error no tiene relación con esta app; se descarta acá para que
+      // no dispare el overlay de errores de React en desarrollo.
+      window.addEventListener('error', function (event) {
+        var msg = (event && event.message) || '';
+        var fromOurBundle = event.filename && /\/static\/js\//.test(event.filename);
+        var isOpaqueCrossOriginError = msg === 'Script error.' && !event.filename;
+        if (!fromOurBundle && (/ethereum/i.test(msg) || isOpaqueCrossOriginError)) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      }, true);
+    </script>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
