@@ -3,8 +3,17 @@ import axios from 'axios';
 import '/Users/danielMac/ws/workspace/radio02/cliente/src/styles.css';
 //import imagen from '/Users/danielMac/ws/workspace/radio02/cliente/src/botones/frec_do-1.svg';
 
+// Tamaño de diseño de .app-container (293pt x 519pt, 1pt = 4/3px en CSS)
+const DESIGN_WIDTH = 293 * (4 / 3);
+const DESIGN_HEIGHT = 519 * (4 / 3);
 
-
+function getFitScale() {
+  return Math.min(
+    window.innerWidth / DESIGN_WIDTH,
+    window.innerHeight / DESIGN_HEIGHT,
+    1
+  );
+}
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
@@ -37,6 +46,18 @@ function App() {
 
 
   }, [isRecording]);
+
+  const [scale, setScale] = useState(getFitScale);
+
+  useEffect(() => {
+    const handleResize = () => setScale(getFitScale());
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   const [datoRecibido, setDatoRecibido] = useState('');
 
@@ -106,8 +127,12 @@ let ffrequencyd2=datoRecibido.slice(-resto);
 
   return (
 
-  <div className="app-container">
-    
+  <div className="app-viewport">
+  <div
+    className="app-container"
+    style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+  >
+
     <div style={{ border: '1px solid #ccc', textAlign: "center", color:'cyan' }}>
            <p>{ffrequencyd1}</p>
            <p>{ffrequencyd2}</p>
@@ -201,6 +226,7 @@ let ffrequencyd2=datoRecibido.slice(-resto);
      </label>
      <button type="submit" className={"button1"} onClick={handleSubmit2} >Grados</button>
     </form>
+  </div>
   </div>
   );
   

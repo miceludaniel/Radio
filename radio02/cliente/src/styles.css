@@ -1,6 +1,17 @@
-.app-container {
+.app-viewport {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000000;
+    overflow: hidden;
+  }
+
+  .app-container {
     width: 293pt;
     height: 519pt;
+    flex-shrink: 0;
     background-color: #000000;
   }
 
