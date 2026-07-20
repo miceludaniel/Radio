@@ -1,4 +1,4 @@
-Todo va en
+cdTodo va en
 /Users/danielMac/ws/workspace/radio02
 
 radio02 tiene dos directorios importantes: cliente y servidor

@@ -49,8 +49,8 @@ function App() {
     const [input1, setInput1] = useState('');
     const [input2, setInput2] = useState('');
 
-  //const puerto = 'http://localhost:3000/enviar-dato';
-  const puerto = 'http://192.168.1.3:3000/enviar-dato';
+  // Cliente en 8443, servidor en 10000 (proxy en package.json)
+  const puerto = '/enviar-dato';
 
   const handleMouseDown = () => {
     setColor(color === 'white' ? '#0255A5' : 'white');

@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
-const port = 3000;
+const port = 10000;
 const fs = require('fs');
 const { SerialPort } = require('serialport');
 const USBRelay = require("@josephdadams/usbrelay");
@@ -1138,43 +1138,46 @@ case 'ancho_up-1':{
 
     } else {
     let grados = fs.readFileSync(rutagrados, 'utf-8');
-    let grados2 = grados * 1;
-    let datodato2 = datodato * 1;
-    let grados1 = grados2 + datodato2;
+    let grados2 = grados * 1; // grados2 son los datos rescatados del archivo
+    let datodato2 = datodato * 1; //datodato2 son los grados introducidos por teclado
+    let grados1 = datodato2 * 1;
+    let constgrad = 100 / 36;
 
 
-    if (grados1 > 360) {
-      datodato2 = 360 - grados2;
-      grados2 = 360;
+
+
+
+    if (datodato2 > 360 || datodato2 < 0) {
+      grados1 = grados2 * 1;
+      
     } else {
-        if (grados1 < 0){
-          datodato2 = grados2 * (-1);
-          grados2 = 0;
-        } else {
-          grados2 = grados1;
-        }
+        grados1 = datodato2;
     }
 
-    const configJSON = JSON.stringify(grados2, null, 2); 
+    const configJSON = JSON.stringify(grados1, null, 2); 
     fs.writeFileSync(rutagrados, configJSON, 'utf8', (err) => {
        if (err) {
        console.error('Error al escribir en el archivo:', err);
         return;
       }});
 
-    if (datodato2 > 0) {
-      relay.setState(0, true);
-      setTimeout(function () {
-          relay.setState(0, false);
-      }, grados2 * 1000);
-    } else {
+    if (datodato2 > grados2 ) {
       relay.setState(1, true);
+	grados1 = (datodato2  - grados2) * constgrad * 12; //el último múltiplo es la vuelta completa * 12
+        console.log(grados1);
       setTimeout(function () {
           relay.setState(1, false);
-      }, grados2 * 1000);
+      }, grados1);
+    } else {
+      relay.setState(2, true);
+	grados1 = (grados2 - datodato2) * constgrad * 12;  //el último múltiplo es la vuelta completa * 12
+        console.log(2);
+      setTimeout(function () {
+          relay.setState(2, false);
+      }, grados1);
      }
     }
-
+	
     datosDisplay();
     break; 
   }
