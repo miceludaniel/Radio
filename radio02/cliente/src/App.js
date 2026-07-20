@@ -124,6 +124,13 @@ function App() {
     });
 };
 
+  useEffect(() => {
+    // Al cargar la página, mostrar el último estado guardado sin esperar
+    // a que se toque un botón.
+    enviarDatos('nullestado-1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 let punto = datoRecibido.indexOf("&");
 let largo = datoRecibido.length;
 let resto = largo - punto - 1;

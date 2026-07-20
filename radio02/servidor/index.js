@@ -1101,7 +1101,12 @@ case 'ancho_up-1':{
     setNB();
     datosDisplay();
     break; }
-//************************************************************** */ 
+//************************************************************** */
+  case 'estado-1': {
+    // Solo devuelve el último estado guardado, sin tocar el hardware.
+    datosDisplay();
+    break; }
+//************************************************************** */
   default: {
     const rutagrados = '/Users/danielMac/ws/workspace/radio02/config/grados.json';
     let grados ='';
