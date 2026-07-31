@@ -1,9 +1,9 @@
 radio02 tiene dos directorios importantes: cliente y servidor
 
-ejecutar nvm use 24.4.1 en el directorio y los dos subdirectorios
-radio02 nvm use 24.4.1
-radio02/cliente nvm use 24.4.1
-radio02/servidor nvm use 24.4.1
+ejecutar nvm use 2019.0 en el directorio y los dos subdirectorios
+radio02 nvm use 20
+radio02/cliente nvm use 20
+radio02/servidor nvm use 20
 
 para ejecutar el programa, hacerlo en los dos directorios:
 radio02/cliente npm start

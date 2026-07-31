@@ -1,6 +1,16 @@
-.app-container {
+.app-viewport {
+    /* position, top/left/width/height los fija App.js según visualViewport */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000000;
+    overflow: hidden;
+  }
+
+  .app-container {
     width: 293pt;
     height: 519pt;
+    flex-shrink: 0;
     background-color: #000000;
   }
 

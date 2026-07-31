@@ -3,8 +3,27 @@ import axios from 'axios';
 import '/Users/danielMac/ws/workspace/radio02/cliente/src/styles.css';
 //import imagen from '/Users/danielMac/ws/workspace/radio02/cliente/src/botones/frec_do-1.svg';
 
+// Tamaño de diseño de .app-container (293pt x 519pt, 1pt = 4/3px en CSS)
+const DESIGN_WIDTH = 293 * (4 / 3);
+const DESIGN_HEIGHT = 519 * (4 / 3);
 
+function getViewportBox() {
+  // visualViewport refleja el área realmente visible en Safari/iOS: se
+  // achica cuando aparece el teclado y además se desplaza (offsetTop/Left)
+  // porque Safari intenta llevar el input enfocado por encima del teclado.
+  // Si sólo usáramos width/height sin el offset, el contenedor quedaría
+  // recortado arriba y con un hueco vacío abajo mientras el teclado está
+  // abierto.
+  const vv = window.visualViewport;
+  if (vv) {
+    return { top: vv.offsetTop, left: vv.offsetLeft, width: vv.width, height: vv.height };
+  }
+  return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight };
+}
 
+function getFitScale(box) {
+  return Math.min(box.width / DESIGN_WIDTH, box.height / DESIGN_HEIGHT, 1);
+}
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
@@ -38,16 +57,58 @@ function App() {
 
   }, [isRecording]);
 
+  const [viewportBox, setViewportBox] = useState(getViewportBox);
+  // Alto "sin teclado" para la escala: sólo crece (nunca lo achica el
+  // teclado al abrirse), y se resetea al alto actual en un cambio de
+  // orientación.
+  const baseHeightRef = useRef(viewportBox.height);
+
+  useEffect(() => {
+    const updateBox = () => {
+      const box = getViewportBox();
+      if (box.height > baseHeightRef.current) {
+        baseHeightRef.current = box.height;
+      }
+      setViewportBox(box);
+    };
+    const handleOrientationChange = () => {
+      const box = getViewportBox();
+      baseHeightRef.current = box.height;
+      setViewportBox(box);
+    };
+    window.addEventListener('resize', updateBox);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.visualViewport?.addEventListener('resize', updateBox);
+    window.visualViewport?.addEventListener('scroll', updateBox);
+    return () => {
+      window.removeEventListener('resize', updateBox);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      window.visualViewport?.removeEventListener('resize', updateBox);
+      window.visualViewport?.removeEventListener('scroll', updateBox);
+    };
+  }, []);
+
+  const scale = getFitScale({ width: viewportBox.width, height: baseHeightRef.current });
+  // Si el diseño (a esta escala) no entra completo en el alto visible
+  // actual, se ancla abajo para que los campos de abajo sigan a la vista
+  // y lo que se recorte sea la parte de arriba. Si entra, se centra. Esto
+  // se calcula directo (alto real vs. disponible), no adivinando si el
+  // teclado está abierto — esa heurística fallaba en algunos dispositivos.
+  const overflowing = scale * DESIGN_HEIGHT > viewportBox.height;
+
   const [datoRecibido, setDatoRecibido] = useState('');
 
   const buttons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
   const [color, setColor] = useState('white');
 
-  const [dato, setDato] = useState('');
+  //const [dato, setDato] = useState('');
 
-  //const puerto = 'http://localhost:3000/enviar-dato';
-  const puerto = 'http://192.168.1.3:3000/enviar-dato';
+    const [input1, setInput1] = useState('');
+    const [input2, setInput2] = useState('');
+
+  // Cliente en 8443, servidor en 10000 (proxy en package.json)
+  const puerto = '/enviar-dato';
 
   const handleMouseDown = () => {
     setColor(color === 'white' ? '#0255A5' : 'white');
@@ -58,7 +119,8 @@ function App() {
   };
 
 
-  const handleSubmit = (event) => {
+  const handleSubmit1 = (event) => {
+ const dato = 'frec' + input1;
       event.preventDefault();
     axios
     .post(puerto, { dato })
@@ -70,6 +132,19 @@ function App() {
     });
   };
   
+  const handleSubmit2 = (event) => {
+ const dato = 'grad' + input2;
+    event.preventDefault();
+  axios
+  .post(puerto, { dato })
+  .then(response => {
+    setDatoRecibido(response.data.dato );
+  })
+  .catch(error => {
+    console.error('Error al enviar el dato:', error);
+  });
+};
+
   const enviarDatos = (dato) => {
     axios.post(puerto, { dato })
     .then(response => {
@@ -80,6 +155,13 @@ function App() {
     });
 };
 
+  useEffect(() => {
+    // Al cargar la página, mostrar el último estado guardado sin esperar
+    // a que se toque un botón.
+    enviarDatos('nullestado-1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 let punto = datoRecibido.indexOf("&");
 let largo = datoRecibido.length;
 let resto = largo - punto - 1;
@@ -89,8 +171,22 @@ let ffrequencyd2=datoRecibido.slice(-resto);
 
   return (
 
-  <div className="app-container">
-    
+  <div
+    className="app-viewport"
+    style={{
+      position: 'fixed',
+      top: viewportBox.top,
+      left: viewportBox.left,
+      width: viewportBox.width,
+      height: viewportBox.height,
+      alignItems: overflowing ? 'flex-end' : 'center',
+    }}
+  >
+  <div
+    className="app-container"
+    style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
+  >
+
     <div style={{ border: '1px solid #ccc', textAlign: "center", color:'cyan' }}>
            <p>{ffrequencyd1}</p>
            <p>{ffrequencyd2}</p>
@@ -98,80 +194,93 @@ let ffrequencyd2=datoRecibido.slice(-resto);
 
     <div className="col-md-5" key={buttons}>
 
-      <button key={1} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('freq_do-1')}>
+      <button key={1} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('nullfreq_do-1')}>
        Frecuencia -
       </button>
       
-      <button key={2} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('freq_up-1')}>
+      <button key={2} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}  onClick={() => enviarDatos('nullfreq_up-1')}>
        Frecuencia +
       </button>
       
-      <button key={3} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('AFC-1')}>
+      <button key={3} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullAFC-1')}>
        AFC
       </button>
 
-      <button key={4} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('ancho_do-1')}>
+      <button key={4} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullancho_do-1')}>
        Ancho -
       </button>
 
-      <button key={5} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('ancho_up-1')}}>
+      <button key={5} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullancho_up-1')}}>
        Ancho +
       </button>
 
-      <button key={6} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('AGC-1')}}>
+      <button key={6} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullAGC-1')}}>
        AGC
       </button>
 
-      <button key={7} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('step_do-1')}}>
+      <button key={7} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullstep_do-1')}}>
        Salto -
       </button>
 
-      <button key={8} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('step_up-1')}}>
+      <button key={8} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullstep_up-1')}}>
        Salto +
       </button>
 
-      <button key={9} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('ATT-1')}}>
+      <button key={9} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullATT-1')}}>
        ATT
       </button>
 
-      <button key={10} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('volume_do-1')}}>
+      <button key={10} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullvolume_do-1')}}>
        Volumen -
       </button>
 
-      <button key={11} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('volume_up-1')}}>
+      <button key={11} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullvolume_up-1')}}>
       Volumen +
       </button>
 
-      <button key={12} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('NB-1')}>
+      <button key={12} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullNB-1')}>
        NB
       </button>
 
-      <button key={13} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('modulacion')}}>
+      <button key={13} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullmodulacion')}}>
        Modulación
       </button>
 
-      <button key={14} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('encendido') }}>
+      <button key={14} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => {enviarDatos('nullencendido') }}>
        Encendido
       </button>
 
-      <button key={15} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('apagado')}>
+      <button key={15} className={"button4"} style={{ color }} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onClick={() => enviarDatos('nullapagado')}>
        Apagado
       </button>
       
     </div>
-    <form onSubmit={handleSubmit}>
+    <form> 
      <label>
       <input 
+        name = "frecuencia"
         type = "number"
-        value = { dato }
+        value = {input1}
         pattern="[0-9]{0,10}"
-        onChange = {(e) => setDato(e.target.value)}
+        onChange = {(e) => setInput1(e.target.value)}
       />
      </label>
-     <button type="submit" className={"button1"} >MHz</button>
+     <button type="submit" className={"button1"} onClick={handleSubmit1} >MHz</button>
      <button className={"button1"} onClick={() => setIsRecording(!isRecording)}>
         {isRecording ? 'No audio' : 'audio'}</button>
+
+        <label>
+      <input 
+        name = 'grados'
+        type = "number"
+        value = { input2 } 
+        pattern="[0-9]{0,10}"
+        onChange = {(e) => setInput2(e.target.value)}
+      />
+     </label>
+     <button type="submit" className={"button1"} onClick={handleSubmit2} >Grados</button>
     </form>
+  </div>
   </div>
   );
   

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cliente",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "cliente", "start"],
+      "port": 8443
+    }
+  ]
+}
