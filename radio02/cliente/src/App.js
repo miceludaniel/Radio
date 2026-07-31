@@ -7,11 +7,6 @@ import '/Users/danielMac/ws/workspace/radio02/cliente/src/styles.css';
 const DESIGN_WIDTH = 293 * (4 / 3);
 const DESIGN_HEIGHT = 519 * (4 / 3);
 
-// Una reducción grande de altura (>150px) es el teclado abriéndose; una
-// reducción chica es la barra de herramientas de Safari mostrándose u
-// ocultándose (eso sí debe seguir reescalando el diseño como antes).
-const KEYBOARD_HEIGHT_DELTA = 150;
-
 function getViewportBox() {
   // visualViewport refleja el área realmente visible en Safari/iOS: se
   // achica cuando aparece el teclado y además se desplaza (offsetTop/Left)
@@ -63,43 +58,43 @@ function App() {
   }, [isRecording]);
 
   const [viewportBox, setViewportBox] = useState(getViewportBox);
-  // Alto "sin teclado" usado para la escala: se actualiza con cambios
-  // chicos (barra de Safari) pero se congela ante una caída grande
-  // (teclado), para que el diseño no se achique al escribir.
+  // Alto "sin teclado" para la escala: sólo crece (nunca lo achica el
+  // teclado al abrirse), y se resetea al alto actual en un cambio de
+  // orientación.
   const baseHeightRef = useRef(viewportBox.height);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
-    const handleViewportChange = () => {
+    const updateBox = () => {
       const box = getViewportBox();
-      const drop = baseHeightRef.current - box.height;
-      if (drop > KEYBOARD_HEIGHT_DELTA) {
-        setKeyboardOpen(true);
-      } else {
+      if (box.height > baseHeightRef.current) {
         baseHeightRef.current = box.height;
-        setKeyboardOpen(false);
       }
       setViewportBox(box);
     };
     const handleOrientationChange = () => {
       const box = getViewportBox();
       baseHeightRef.current = box.height;
-      setKeyboardOpen(false);
       setViewportBox(box);
     };
-    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('resize', updateBox);
     window.addEventListener('orientationchange', handleOrientationChange);
-    window.visualViewport?.addEventListener('resize', handleViewportChange);
-    window.visualViewport?.addEventListener('scroll', handleViewportChange);
+    window.visualViewport?.addEventListener('resize', updateBox);
+    window.visualViewport?.addEventListener('scroll', updateBox);
     return () => {
-      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('resize', updateBox);
       window.removeEventListener('orientationchange', handleOrientationChange);
-      window.visualViewport?.removeEventListener('resize', handleViewportChange);
-      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
+      window.visualViewport?.removeEventListener('resize', updateBox);
+      window.visualViewport?.removeEventListener('scroll', updateBox);
     };
   }, []);
 
   const scale = getFitScale({ width: viewportBox.width, height: baseHeightRef.current });
+  // Si el diseño (a esta escala) no entra completo en el alto visible
+  // actual, se ancla abajo para que los campos de abajo sigan a la vista
+  // y lo que se recorte sea la parte de arriba. Si entra, se centra. Esto
+  // se calcula directo (alto real vs. disponible), no adivinando si el
+  // teclado está abierto — esa heurística fallaba en algunos dispositivos.
+  const overflowing = scale * DESIGN_HEIGHT > viewportBox.height;
 
   const [datoRecibido, setDatoRecibido] = useState('');
 
@@ -184,10 +179,7 @@ let ffrequencyd2=datoRecibido.slice(-resto);
       left: viewportBox.left,
       width: viewportBox.width,
       height: viewportBox.height,
-      // Con el teclado abierto el diseño (a escala fija) no entra en el
-      // alto visible: se ancla abajo para que los campos sigan a la vista
-      // y la parte de arriba se recorte, en vez de achicar todo.
-      alignItems: keyboardOpen ? 'flex-end' : 'center',
+      alignItems: overflowing ? 'flex-end' : 'center',
     }}
   >
   <div
