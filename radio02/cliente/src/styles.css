@@ -1,7 +1,5 @@
 .app-viewport {
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
+    /* position, top/left/width/height los fija App.js según visualViewport */
     display: flex;
     align-items: center;
     justify-content: center;

@@ -7,16 +7,27 @@ import '/Users/danielMac/ws/workspace/radio02/cliente/src/styles.css';
 const DESIGN_WIDTH = 293 * (4 / 3);
 const DESIGN_HEIGHT = 519 * (4 / 3);
 
-function getFitScale() {
-  // visualViewport refleja el alto real visible en Safari/iOS (descuenta
-  // la barra de herramientas); window.innerHeight ahí puede ser más alto.
-  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-  return Math.min(
-    viewportWidth / DESIGN_WIDTH,
-    viewportHeight / DESIGN_HEIGHT,
-    1
-  );
+// Una reducción grande de altura (>150px) es el teclado abriéndose; una
+// reducción chica es la barra de herramientas de Safari mostrándose u
+// ocultándose (eso sí debe seguir reescalando el diseño como antes).
+const KEYBOARD_HEIGHT_DELTA = 150;
+
+function getViewportBox() {
+  // visualViewport refleja el área realmente visible en Safari/iOS: se
+  // achica cuando aparece el teclado y además se desplaza (offsetTop/Left)
+  // porque Safari intenta llevar el input enfocado por encima del teclado.
+  // Si sólo usáramos width/height sin el offset, el contenedor quedaría
+  // recortado arriba y con un hueco vacío abajo mientras el teclado está
+  // abierto.
+  const vv = window.visualViewport;
+  if (vv) {
+    return { top: vv.offsetTop, left: vv.offsetLeft, width: vv.width, height: vv.height };
+  }
+  return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight };
+}
+
+function getFitScale(box) {
+  return Math.min(box.width / DESIGN_WIDTH, box.height / DESIGN_HEIGHT, 1);
 }
 
 function App() {
@@ -51,19 +62,44 @@ function App() {
 
   }, [isRecording]);
 
-  const [scale, setScale] = useState(getFitScale);
+  const [viewportBox, setViewportBox] = useState(getViewportBox);
+  // Alto "sin teclado" usado para la escala: se actualiza con cambios
+  // chicos (barra de Safari) pero se congela ante una caída grande
+  // (teclado), para que el diseño no se achique al escribir.
+  const baseHeightRef = useRef(viewportBox.height);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => setScale(getFitScale());
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    window.visualViewport?.addEventListener('resize', handleResize);
+    const handleViewportChange = () => {
+      const box = getViewportBox();
+      const drop = baseHeightRef.current - box.height;
+      if (drop > KEYBOARD_HEIGHT_DELTA) {
+        setKeyboardOpen(true);
+      } else {
+        baseHeightRef.current = box.height;
+        setKeyboardOpen(false);
+      }
+      setViewportBox(box);
+    };
+    const handleOrientationChange = () => {
+      const box = getViewportBox();
+      baseHeightRef.current = box.height;
+      setKeyboardOpen(false);
+      setViewportBox(box);
+    };
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+    window.visualViewport?.addEventListener('scroll', handleViewportChange);
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-      window.visualViewport?.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
     };
   }, []);
+
+  const scale = getFitScale({ width: viewportBox.width, height: baseHeightRef.current });
 
   const [datoRecibido, setDatoRecibido] = useState('');
 
@@ -140,7 +176,20 @@ let ffrequencyd2=datoRecibido.slice(-resto);
 
   return (
 
-  <div className="app-viewport">
+  <div
+    className="app-viewport"
+    style={{
+      position: 'fixed',
+      top: viewportBox.top,
+      left: viewportBox.left,
+      width: viewportBox.width,
+      height: viewportBox.height,
+      // Con el teclado abierto el diseño (a escala fija) no entra en el
+      // alto visible: se ancla abajo para que los campos sigan a la vista
+      // y la parte de arriba se recorte, en vez de achicar todo.
+      alignItems: keyboardOpen ? 'flex-end' : 'center',
+    }}
+  >
   <div
     className="app-container"
     style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
