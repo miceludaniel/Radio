@@ -189,16 +189,8 @@ let ffrequencyd2=datoRecibido.slice(-resto);
     style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
   >
 
-    <button
-      className={"button1"}
-      style={{ alignSelf: 'flex-start' }}
-      onClick={() => setPage(page === 'controles' ? 'bandscope' : 'controles')}
-    >
-      {page === 'controles' ? 'Bandscope' : 'Controles'}
-    </button>
-
     {page === 'bandscope' ? (
-      <BandScope puerto={puerto} />
+      <BandScope puerto={puerto} onVolver={() => setPage('controles')} />
     ) : (
     <>
     <div style={{ border: '1px solid #ccc', textAlign: "center", color:'cyan' }}>
@@ -269,9 +261,10 @@ let ffrequencyd2=datoRecibido.slice(-resto);
       </button>
       
     </div>
-    <form> 
+    <form>
+     <div>
      <label>
-      <input 
+      <input
         name = "frecuencia"
         type = "number"
         value = {input1}
@@ -282,17 +275,22 @@ let ffrequencyd2=datoRecibido.slice(-resto);
      <button type="submit" className={"button1"} onClick={handleSubmit1} >MHz</button>
      <button className={"button1"} onClick={() => setIsRecording(!isRecording)}>
         {isRecording ? 'No audio' : 'audio'}</button>
+     </div>
 
+     <div>
         <label>
-      <input 
+      <input
         name = 'grados'
         type = "number"
-        value = { input2 } 
+        value = { input2 }
         pattern="[0-9]{0,10}"
         onChange = {(e) => setInput2(e.target.value)}
+        style={{ width: '50pt' }}
       />
      </label>
      <button type="submit" className={"button1"} onClick={handleSubmit2} >Grados</button>
+     <button className={"button1"} onClick={() => setPage('bandscope')}>Barrer banda</button>
+     </div>
     </form>
     </>
     )}

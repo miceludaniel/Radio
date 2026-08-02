@@ -8,7 +8,7 @@ function levelToColor(level) {
   return `hsl(${hue}, 100%, ${20 + t * 30}%)`;
 }
 
-function BandScope({ puerto }) {
+function BandScope({ puerto, onVolver }) {
   const canvasRef = useRef(null);
   const sinceRef = useRef(0);
   const samplesRef = useRef(0);
@@ -96,6 +96,9 @@ function BandScope({ puerto }) {
       }}
     >
       <div>
+        <button className={'button1'} onClick={onVolver}>
+          Controles
+        </button>
         <button className={'button1'} onClick={() => enviar('nullbandscope_on')}>
           Disparar
         </button>
@@ -121,7 +124,7 @@ function BandScope({ puerto }) {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
+            justifyContent: 'space-around',
             width: '38pt',
             fontSize: '6pt',
             fontFamily: 'monospace',
