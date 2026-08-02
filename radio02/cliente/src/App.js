@@ -191,6 +191,7 @@ let ffrequencyd2=datoRecibido.slice(-resto);
 
     <button
       className={"button1"}
+      style={{ alignSelf: 'flex-start' }}
       onClick={() => setPage(page === 'controles' ? 'bandscope' : 'controles')}
     >
       {page === 'controles' ? 'Bandscope' : 'Controles'}

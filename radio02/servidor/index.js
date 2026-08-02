@@ -1359,6 +1359,7 @@ app.get('/bandscope-rows', (req, res) => {
   const since = Number(req.query.since) || 0;
   const newRows = bandscopeRows.filter((r) => r.seq > since);
   const span = BANDSCOPE_SPANS[bandscopeReadSpanIndex()];
+  const centerHz = Number(fs.readFileSync('/Users/danielMac/ws/workspace/radio02/config/ffrequency.json', 'utf-8'));
   res.json({
     rows: newRows,
     lastSeq: bandscopeRowSeq,
@@ -1366,6 +1367,7 @@ app.get('/bandscope-rows', (req, res) => {
     spanKhz: span.khz,
     stepHz: span.stepHz,
     samples: span.half * 2,
+    centerHz,
   });
 });
 //************************************************************* */
