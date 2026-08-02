@@ -1,6 +1,7 @@
 import React, {  useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import '/Users/danielMac/ws/workspace/radio02/cliente/src/styles.css';
+import BandScope from '/Users/danielMac/ws/workspace/radio02/cliente/src/BandScope.js';
 //import imagen from '/Users/danielMac/ws/workspace/radio02/cliente/src/botones/frec_do-1.svg';
 
 // Tamaño de diseño de .app-container (293pt x 519pt, 1pt = 4/3px en CSS)
@@ -26,6 +27,7 @@ function getFitScale(box) {
 }
 
 function App() {
+  const [page, setPage] = useState('controles');
   const [isRecording, setIsRecording] = useState(false);
   const audioContext = useRef(null);
   const mediaStreamSource = useRef(null);
@@ -187,6 +189,17 @@ let ffrequencyd2=datoRecibido.slice(-resto);
     style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
   >
 
+    <button
+      className={"button1"}
+      onClick={() => setPage(page === 'controles' ? 'bandscope' : 'controles')}
+    >
+      {page === 'controles' ? 'Bandscope' : 'Controles'}
+    </button>
+
+    {page === 'bandscope' ? (
+      <BandScope puerto={puerto} />
+    ) : (
+    <>
     <div style={{ border: '1px solid #ccc', textAlign: "center", color:'cyan' }}>
            <p>{ffrequencyd1}</p>
            <p>{ffrequencyd2}</p>
@@ -280,6 +293,8 @@ let ffrequencyd2=datoRecibido.slice(-resto);
      </label>
      <button type="submit" className={"button1"} onClick={handleSubmit2} >Grados</button>
     </form>
+    </>
+    )}
   </div>
   </div>
   );

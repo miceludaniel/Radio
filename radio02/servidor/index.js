@@ -29,6 +29,121 @@ const portcom = new SerialPort({
   const IfShift = 128;
   const tuningStep = 10;
 
+//********************* Band Scope *
+// Los 4 niveles de SPAN se eligen para que cada lado (arriba/abajo del
+// centro) use como máximo 16 muestras, es decir un solo paquete serie
+// (NE170/NE180). El protocolo no documenta con claridad el orden de bytes
+// cuando hacen falta más paquetes (NE160, NE190, etc.), así que evitamos
+// esa zona ambigua del todo.
+const BANDSCOPE_SPANS = [
+  { khz: 25, stepHz: 2500, half: 10 },
+  { khz: 50, stepHz: 5000, half: 10 },
+  { khz: 100, stepHz: 10000, half: 10 },
+  { khz: 200, stepHz: 12500, half: 16 },
+];
+const rutaBandscopeSpan = '/Users/danielMac/ws/workspace/radio02/config/bandscopeSpan.json';
+const rutaBandscopeOn = '/Users/danielMac/ws/workspace/radio02/config/bandscopeOn.json';
+
+let bandscopeActive = false;
+let bandscopeRxBuffer = '';
+let bandscopeSweep = { p70: null, p80: null };
+let bandscopeRows = [];
+let bandscopeRowSeq = 0;
+let bandscopePollTimer = null;
+const BANDSCOPE_MAX_ROWS = 300;
+// NE1 + nº de paquete (2 hex) + 32 hex de datos (16 muestras) + 1 char descartable
+const NE1_PACKET_RE = /NE1([0-9A-Fa-f]{2})([0-9A-Fa-f]{32})[0-9A-Fa-f]/;
+
+function bandscopeReadSpanIndex() {
+  const idx = Number(fs.readFileSync(rutaBandscopeSpan, 'utf-8'));
+  return BANDSCOPE_SPANS[idx] ? idx : 3;
+}
+
+function bandscopeBuildCommand(spanIdx, on) {
+  const span = BANDSCOPE_SPANS[spanIdx] || BANDSCOPE_SPANS[3];
+  const samples = span.half * 2;
+  const samplesHex = samples.toString(16).toUpperCase().padStart(2, '0');
+  const onOff = on ? '01' : '00';
+  const stepHex = String(span.stepHz).padStart(6, '0');
+  return 'ME00001' + samplesHex + '05' + onOff + '00' + stepHex;
+}
+
+function bandscopeSendCommand(cmd) {
+  portcom.write(cmd + '\r\n', (err) => {
+    if (err) {
+      console.error('Error al escribir en el puerto (bandscope):', err.message);
+    }
+  });
+}
+
+function bandscopePoll() {
+  const chunk = portcom.read();
+  if (chunk === null || chunk === undefined) {
+    return;
+  }
+  const chunkStr = Buffer.from(chunk).toString();
+  bandscopeRxBuffer += chunkStr;
+  if (bandscopeRxBuffer.length > 4000) {
+    bandscopeRxBuffer = bandscopeRxBuffer.slice(-2000);
+  }
+
+  let match;
+  while ((match = bandscopeRxBuffer.match(NE1_PACKET_RE))) {
+    const packetNum = match[1].toUpperCase();
+    const dataHex = match[2].toUpperCase();
+    bandscopeRxBuffer = bandscopeRxBuffer.slice(match.index + match[0].length);
+
+    if (packetNum !== '70' && packetNum !== '80') {
+      continue;
+    }
+    const bytes = [];
+    for (let i = 0; i < 32; i += 2) {
+      bytes.push(parseInt(dataHex.substring(i, i + 2), 16));
+    }
+    if (packetNum === '70') {
+      bandscopeSweep.p70 = bytes;
+    } else {
+      bandscopeSweep.p80 = bytes;
+    }
+
+    if (bandscopeSweep.p70 && bandscopeSweep.p80) {
+      const half = BANDSCOPE_SPANS[bandscopeReadSpanIndex()].half;
+      const below = bandscopeSweep.p70.slice(0, half).reverse();
+      const aboveAndCenter = bandscopeSweep.p80.slice(0, half);
+      bandscopeRowSeq += 1;
+      bandscopeRows.push({ seq: bandscopeRowSeq, levels: [...below, ...aboveAndCenter] });
+      if (bandscopeRows.length > BANDSCOPE_MAX_ROWS) {
+        bandscopeRows.shift();
+      }
+      bandscopeSweep = { p70: null, p80: null };
+    }
+  }
+}
+
+function bandscopeStart() {
+  bandscopeSweep = { p70: null, p80: null };
+  bandscopeRxBuffer = '';
+  bandscopeActive = true;
+  const cmd = bandscopeBuildCommand(bandscopeReadSpanIndex(), true);
+  console.log('[bandscope] enviando G301 (autoupdate ON) + comando ON:', cmd);
+  bandscopeSendCommand('G301');
+  bandscopeSendCommand(cmd);
+  if (!bandscopePollTimer) {
+    bandscopePollTimer = setInterval(bandscopePoll, 100);
+  }
+}
+
+function bandscopeStop() {
+  const cmd = bandscopeBuildCommand(bandscopeReadSpanIndex(), false);
+  console.log('[bandscope] enviando comando OFF:', cmd);
+  bandscopeSendCommand(cmd);
+  bandscopeActive = false;
+  if (bandscopePollTimer) {
+    clearInterval(bandscopePollTimer);
+    bandscopePollTimer = null;
+  }
+}
+//********************* */
 
 app.use(express.json());
 
@@ -62,6 +177,9 @@ function signalStrength() {
     }
 
    const intervalId = setInterval(() => {
+   if (bandscopeActive) {
+     return; // no competir por el puerto serie mientras el bandscope está activo
+   }
    portcom.write(sendCommand, (err) => {
      if (err) {
        return console.error('Error al escribir en el puerto:', err.message);
@@ -1107,6 +1225,54 @@ case 'ancho_up-1':{
     datosDisplay();
     break; }
 //************************************************************** */
+  case 'bandscope_on': {
+    fs.writeFileSync(rutaBandscopeOn, '1', 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    bandscopeStart();
+    datosDisplay();
+    break; }
+//************************************************************** */
+  case 'bandscope_off': {
+    fs.writeFileSync(rutaBandscopeOn, '0', 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    bandscopeStop();
+    datosDisplay();
+    break; }
+//************************************************************** */
+  case 'bandscope_span_up': {
+    let spanIdx = bandscopeReadSpanIndex();
+    spanIdx = (spanIdx + 1) % BANDSCOPE_SPANS.length;
+    fs.writeFileSync(rutaBandscopeSpan, String(spanIdx), 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    if (bandscopeActive) {
+      bandscopeStart();
+    }
+    datosDisplay();
+    break; }
+//************************************************************** */
+  case 'bandscope_span_do': {
+    let spanIdx = bandscopeReadSpanIndex();
+    spanIdx = (spanIdx - 1 + BANDSCOPE_SPANS.length) % BANDSCOPE_SPANS.length;
+    fs.writeFileSync(rutaBandscopeSpan, String(spanIdx), 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    if (bandscopeActive) {
+      bandscopeStart();
+    }
+    datosDisplay();
+    break; }
+//************************************************************** */
   default: {
     const rutagrados = '/Users/danielMac/ws/workspace/radio02/config/grados.json';
     let grados ='';
@@ -1187,6 +1353,20 @@ case 'ancho_up-1':{
     break; 
   }
 }
+});
+//************************************************************* */
+app.get('/bandscope-rows', (req, res) => {
+  const since = Number(req.query.since) || 0;
+  const newRows = bandscopeRows.filter((r) => r.seq > since);
+  const span = BANDSCOPE_SPANS[bandscopeReadSpanIndex()];
+  res.json({
+    rows: newRows,
+    lastSeq: bandscopeRowSeq,
+    active: bandscopeActive,
+    spanKhz: span.khz,
+    stepHz: span.stepHz,
+    samples: span.half * 2,
+  });
 });
 //************************************************************* */
 const host = "localhost";
