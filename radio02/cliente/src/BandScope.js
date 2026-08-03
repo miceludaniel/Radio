@@ -106,10 +106,16 @@ function BandScope({ puerto, onVolver }) {
           Detener
         </button>
         <button className={'button1'} onClick={() => enviar('nullbandscope_span_do')}>
-          Paso -
+          Límite -
         </button>
         <button className={'button1'} onClick={() => enviar('nullbandscope_span_up')}>
-          Paso +
+          Límite +
+        </button>
+        <button className={'button1'} onClick={() => enviar('nullbandscope_step_do')}>
+          Salto -
+        </button>
+        <button className={'button1'} onClick={() => enviar('nullbandscope_step_up')}>
+          Salto +
         </button>
       </div>
       <p>

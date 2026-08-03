@@ -30,19 +30,37 @@ const portcom = new SerialPort({
   const tuningStep = 10;
 
 //********************* Band Scope *
-// Los 4 niveles de SPAN se eligen para que cada lado (arriba/abajo del
-// centro) use como máximo 16 muestras, es decir un solo paquete serie
-// (NE170/NE180). El protocolo no documenta con claridad el orden de bytes
-// cuando hacen falta más paquetes (NE160, NE190, etc.), así que evitamos
-// esa zona ambigua del todo.
-const BANDSCOPE_SPANS = [
-  { khz: 25, stepHz: 2500, half: 10 },
-  { khz: 50, stepHz: 5000, half: 10 },
-  { khz: 100, stepHz: 10000, half: 10 },
-  { khz: 200, stepHz: 12500, half: 16 },
-];
+// Los 4 niveles de "Límite" son el rango total ±Khz elegido. El paso (Hz por
+// muestra) lo define por separado "Salto -/+". A partir de ambos se calcula
+// cuántas muestras hacen falta por lado (half = rango / paso), limitado a 16
+// porque el protocolo sólo documenta con claridad un paquete serie por lado
+// (NE170/NE180); con pasos grandes el rango real queda por debajo del
+// nominal en vez de pedir más paquetes (zona ambigua del protocolo).
+const BANDSCOPE_RANGE_KHZ = [25, 50, 100, 200];
 const rutaBandscopeSpan = '/Users/danielMac/ws/workspace/radio02/config/bandscopeSpan.json';
 const rutaBandscopeOn = '/Users/danielMac/ws/workspace/radio02/config/bandscopeOn.json';
+
+// Paso de sintonía (el mismo índice 1-22 que usan los botones "Salto -"/"Salto +"
+// en Controles), en Hz. El paso máximo útil para el bandscope es 50 KHz
+// (índice 17): con el rango más chico (±25 KHz) un paso mayor ya no permite
+// cubrirlo con al menos un par de muestras por lado.
+const TUNING_STEP_HZ = {
+  1: 1, 2: 10, 3: 20, 4: 50, 5: 100, 6: 500, 7: 1000, 8: 2500, 9: 5000,
+  10: 6250, 11: 9000, 12: 10000, 13: 12500, 14: 20000, 15: 25000, 16: 30000,
+  17: 50000, 18: 100000, 19: 500000, 20: 1000000, 21: 6000000, 22: 10000000,
+};
+const BANDSCOPE_MAX_STEP_INDEX = 17;
+const rutaTuningStepFile = '/Users/danielMac/ws/workspace/radio02/config/tuningStep.json';
+
+function bandscopeReadStepIndex() {
+  const idx = Number(fs.readFileSync(rutaTuningStepFile, 'utf-8'));
+  return TUNING_STEP_HZ[idx] ? idx : 13;
+}
+
+function bandscopeReadStepHz() {
+  const idx = bandscopeReadStepIndex();
+  return Math.min(TUNING_STEP_HZ[idx], TUNING_STEP_HZ[BANDSCOPE_MAX_STEP_INDEX]);
+}
 
 let bandscopeActive = false;
 let bandscopeRxBuffer = '';
@@ -56,15 +74,21 @@ const NE1_PACKET_RE = /NE1([0-9A-Fa-f]{2})([0-9A-Fa-f]{32})[0-9A-Fa-f]/;
 
 function bandscopeReadSpanIndex() {
   const idx = Number(fs.readFileSync(rutaBandscopeSpan, 'utf-8'));
-  return BANDSCOPE_SPANS[idx] ? idx : 3;
+  return BANDSCOPE_RANGE_KHZ[idx] !== undefined ? idx : 3;
 }
 
-function bandscopeBuildCommand(spanIdx, on) {
-  const span = BANDSCOPE_SPANS[spanIdx] || BANDSCOPE_SPANS[3];
-  const samples = span.half * 2;
+function bandscopeReadHalf() {
+  const rangeKhz = BANDSCOPE_RANGE_KHZ[bandscopeReadSpanIndex()];
+  const stepHz = bandscopeReadStepHz();
+  return Math.max(1, Math.min(16, Math.round((rangeKhz * 1000) / stepHz)));
+}
+
+function bandscopeBuildCommand(on) {
+  const half = bandscopeReadHalf();
+  const samples = half * 2;
   const samplesHex = samples.toString(16).toUpperCase().padStart(2, '0');
   const onOff = on ? '01' : '00';
-  const stepHex = String(span.stepHz).padStart(6, '0');
+  const stepHex = String(bandscopeReadStepHz()).padStart(6, '0');
   return 'ME00001' + samplesHex + '05' + onOff + '00' + stepHex;
 }
 
@@ -107,7 +131,7 @@ function bandscopePoll() {
     }
 
     if (bandscopeSweep.p70 && bandscopeSweep.p80) {
-      const half = BANDSCOPE_SPANS[bandscopeReadSpanIndex()].half;
+      const half = bandscopeReadHalf();
       const below = bandscopeSweep.p70.slice(0, half).reverse();
       const aboveAndCenter = bandscopeSweep.p80.slice(0, half);
       bandscopeRowSeq += 1;
@@ -124,7 +148,7 @@ function bandscopeStart() {
   bandscopeSweep = { p70: null, p80: null };
   bandscopeRxBuffer = '';
   bandscopeActive = true;
-  const cmd = bandscopeBuildCommand(bandscopeReadSpanIndex(), true);
+  const cmd = bandscopeBuildCommand(true);
   console.log('[bandscope] enviando G301 (autoupdate ON) + comando ON:', cmd);
   bandscopeSendCommand('G301');
   bandscopeSendCommand(cmd);
@@ -134,7 +158,7 @@ function bandscopeStart() {
 }
 
 function bandscopeStop() {
-  const cmd = bandscopeBuildCommand(bandscopeReadSpanIndex(), false);
+  const cmd = bandscopeBuildCommand(false);
   console.log('[bandscope] enviando comando OFF:', cmd);
   bandscopeSendCommand(cmd);
   bandscopeActive = false;
@@ -1247,7 +1271,7 @@ case 'ancho_up-1':{
 //************************************************************** */
   case 'bandscope_span_up': {
     let spanIdx = bandscopeReadSpanIndex();
-    spanIdx = (spanIdx + 1) % BANDSCOPE_SPANS.length;
+    spanIdx = (spanIdx + 1) % BANDSCOPE_RANGE_KHZ.length;
     fs.writeFileSync(rutaBandscopeSpan, String(spanIdx), 'utf8', (err) => {
       if (err) {
        console.error('Error al escribir en el archivo:', err);
@@ -1261,8 +1285,34 @@ case 'ancho_up-1':{
 //************************************************************** */
   case 'bandscope_span_do': {
     let spanIdx = bandscopeReadSpanIndex();
-    spanIdx = (spanIdx - 1 + BANDSCOPE_SPANS.length) % BANDSCOPE_SPANS.length;
+    spanIdx = (spanIdx - 1 + BANDSCOPE_RANGE_KHZ.length) % BANDSCOPE_RANGE_KHZ.length;
     fs.writeFileSync(rutaBandscopeSpan, String(spanIdx), 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    if (bandscopeActive) {
+      bandscopeStart();
+    }
+    datosDisplay();
+    break; }
+//************************************************************** */
+  case 'bandscope_step_up': {
+    let stepIdx = Math.min(bandscopeReadStepIndex() + 1, BANDSCOPE_MAX_STEP_INDEX);
+    fs.writeFileSync(rutaTuningStepFile, String(stepIdx), 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    if (bandscopeActive) {
+      bandscopeStart();
+    }
+    datosDisplay();
+    break; }
+//************************************************************** */
+  case 'bandscope_step_do': {
+    let stepIdx = Math.max(bandscopeReadStepIndex() - 1, 1);
+    fs.writeFileSync(rutaTuningStepFile, String(stepIdx), 'utf8', (err) => {
       if (err) {
        console.error('Error al escribir en el archivo:', err);
         return;
@@ -1358,15 +1408,16 @@ case 'ancho_up-1':{
 app.get('/bandscope-rows', (req, res) => {
   const since = Number(req.query.since) || 0;
   const newRows = bandscopeRows.filter((r) => r.seq > since);
-  const span = BANDSCOPE_SPANS[bandscopeReadSpanIndex()];
+  const half = bandscopeReadHalf();
+  const stepHz = bandscopeReadStepHz();
   const centerHz = Number(fs.readFileSync('/Users/danielMac/ws/workspace/radio02/config/ffrequency.json', 'utf-8'));
   res.json({
     rows: newRows,
     lastSeq: bandscopeRowSeq,
     active: bandscopeActive,
-    spanKhz: span.khz,
-    stepHz: span.stepHz,
-    samples: span.half * 2,
+    spanKhz: (half * stepHz) / 1000,
+    stepHz,
+    samples: half * 2,
     centerHz,
   });
 });
