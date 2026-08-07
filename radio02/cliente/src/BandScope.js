@@ -119,19 +119,17 @@ function BandScope({ puerto, onVolver }) {
   };
 
   // Frecuencia de cada fila del eje vertical (freqIndex 0 = más baja, arriba).
-  // Como máximo 20 etiquetas: con muchos segmentos hay demasiadas muestras
-  // para mostrar una por fila sin amontonarse, así que se muestran
-  // espaciadas parejo en vez de una por muestra.
+  // Siempre 16 etiquetas repartidas a igual distancia entre sí, desde la
+  // primera fila hasta la última, en vez de una por muestra.
   const half = samples / 2;
-  const MAX_FREQ_LABELS = 20;
-  const labelStep = samples > 0 ? Math.max(1, Math.ceil(samples / MAX_FREQ_LABELS)) : 1;
-  const freqLabels =
-    centerHz != null && samples > 0
-      ? Array.from({ length: Math.ceil(samples / labelStep) }, (_, j) => {
-          const i = j * labelStep;
-          return ((centerHz + (i - half) * stepHz) / 1e6).toFixed(5);
-        })
-      : [];
+  const NUM_FREQ_LABELS = 16;
+  const freqLabels = [];
+  if (centerHz != null && samples > 0) {
+    for (let j = 0; j < NUM_FREQ_LABELS; j += 1) {
+      const i = samples > 1 ? Math.round((j * (samples - 1)) / (NUM_FREQ_LABELS - 1)) : 0;
+      freqLabels.push({ j, value: ((centerHz + (i - half) * stepHz) / 1e6).toFixed(5) });
+    }
+  }
 
   return (
     <div
@@ -188,7 +186,13 @@ function BandScope({ puerto, onVolver }) {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-around',
+            // space-between (no space-around) deja la primera etiqueta
+            // pegada arriba y la última pegada abajo, sin espacio extra en
+            // los bordes, y reparte el resto del alto en partes iguales
+            // entre las demás: la cabeza de la primera calza con la cabeza
+            // del recuadro, el pie de la última con el pie del recuadro, y
+            // la distancia entre las 16 es la misma en todos los tramos.
+            justifyContent: 'space-between',
             alignItems: 'flex-end',
             width: '40pt',
             fontSize: '6pt',
@@ -199,8 +203,8 @@ function BandScope({ puerto, onVolver }) {
             paddingRight: '2px',
           }}
         >
-          {freqLabels.map((label, i) => (
-            <div key={i} style={{ width: 'fit-content', transform: 'scale(1.5, 2)', transformOrigin: 'right' }}>{label}</div>
+          {freqLabels.map(({ j, value }) => (
+            <div key={j} style={{ width: 'fit-content', transform: 'scale(1.5, 2)', transformOrigin: 'right' }}>{value}</div>
           ))}
         </div>
         <canvas
