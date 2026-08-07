@@ -12,75 +12,102 @@ function BandScope({ puerto, onVolver }) {
   const canvasRef = useRef(null);
   const sinceRef = useRef(0);
   const samplesRef = useRef(0);
+  const requestSeqRef = useRef(0);
 
   const [active, setActive] = useState(false);
   const [spanKhz, setSpanKhz] = useState(null);
   const [stepHz, setStepHz] = useState(null);
   const [samples, setSamples] = useState(0);
+  const [segments, setSegments] = useState(1);
   const [centerHz, setCenterHz] = useState(null);
   const [lastSeq, setLastSeq] = useState(0);
   const [rowsDrawn, setRowsDrawn] = useState(0);
 
+  const refresh = () => {
+    // Con polling cada 400ms + un pedido extra al toque de cada botón, dos
+    // pedidos pueden quedar en vuelo a la vez; por WiFi/celular no siempre
+    // resuelven en orden. Si uno viejo llega después de uno más nuevo,
+    // pisaría la pantalla con datos desactualizados — se descarta cualquier
+    // respuesta que no sea la del pedido más reciente.
+    const reqId = ++requestSeqRef.current;
+    axios
+      .get(`/bandscope-rows?since=${sinceRef.current}`)
+      .then((response) => {
+        if (reqId !== requestSeqRef.current) {
+          return;
+        }
+        const { rows, lastSeq: seq, active: activeNow, spanKhz: sk, stepHz: sh, samples: sampleCount, segments: segs, centerHz: chz } = response.data;
+        sinceRef.current = seq;
+        setActive(activeNow);
+        setSpanKhz(sk);
+        setStepHz(sh);
+        setSamples(sampleCount);
+        setSegments(segs);
+        setCenterHz(chz);
+        setLastSeq(seq);
+
+        if (!rows || rows.length === 0) {
+          return;
+        }
+        const canvas = canvasRef.current;
+        if (!canvas) {
+          return;
+        }
+        if (canvas.height !== sampleCount) {
+          canvas.height = sampleCount;
+          samplesRef.current = sampleCount;
+        }
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+
+        rows.forEach((row) => {
+          // Frecuencia vertical (más alta abajo, freqIndex creciente) y
+          // tiempo horizontal: cada barrido nuevo entra por la izquierda
+          // y empuja el historial hacia la derecha.
+          ctx.drawImage(canvas, 0, 0, w - 1, h, 1, 0, w - 1, h);
+          row.levels.forEach((level, freqIndex) => {
+            ctx.fillStyle = levelToColor(level);
+            ctx.fillRect(0, freqIndex, 1, 1);
+          });
+        });
+        setRowsDrawn((n) => n + rows.length);
+      })
+      .catch((error) => {
+        console.error('Error al pedir bandscope-rows:', error);
+      });
+  };
+
+  // Después de cada click se pide el estado al toque, en vez de esperar al
+  // próximo tick del polling (hasta 400ms) — si no, el botón parecía no
+  // hacer nada hasta el toque siguiente.
   const enviar = (dato) => {
-    axios.post(puerto, { dato }).catch((error) => {
-      console.error('Error al enviar el dato:', error);
-    });
+    axios
+      .post(puerto, { dato })
+      .then(refresh)
+      .catch((error) => {
+        console.error('Error al enviar el dato:', error);
+      });
   };
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      axios
-        .get(`/bandscope-rows?since=${sinceRef.current}`)
-        .then((response) => {
-          const { rows, lastSeq: seq, active: activeNow, spanKhz: sk, stepHz: sh, samples: sampleCount, centerHz: chz } = response.data;
-          sinceRef.current = seq;
-          setActive(activeNow);
-          setSpanKhz(sk);
-          setStepHz(sh);
-          setSamples(sampleCount);
-          setCenterHz(chz);
-          setLastSeq(seq);
-
-          if (!rows || rows.length === 0) {
-            return;
-          }
-          const canvas = canvasRef.current;
-          if (!canvas) {
-            return;
-          }
-          if (canvas.height !== sampleCount) {
-            canvas.height = sampleCount;
-            samplesRef.current = sampleCount;
-          }
-          const ctx = canvas.getContext('2d');
-          const w = canvas.width;
-          const h = canvas.height;
-
-          rows.forEach((row) => {
-            // Frecuencia vertical (más alta abajo, freqIndex creciente) y
-            // tiempo horizontal: cada barrido nuevo entra por la izquierda
-            // y empuja el historial hacia la derecha.
-            ctx.drawImage(canvas, 0, 0, w - 1, h, 1, 0, w - 1, h);
-            row.levels.forEach((level, freqIndex) => {
-              ctx.fillStyle = levelToColor(level);
-              ctx.fillRect(0, freqIndex, 1, 1);
-            });
-          });
-          setRowsDrawn((n) => n + rows.length);
-        })
-        .catch((error) => {
-          console.error('Error al pedir bandscope-rows:', error);
-        });
-    }, 400);
-
+    const intervalId = setInterval(refresh, 400);
     return () => clearInterval(intervalId);
   }, []);
 
   // Frecuencia de cada fila del eje vertical (freqIndex 0 = más baja, arriba).
+  // Como máximo 20 etiquetas: con muchos segmentos hay demasiadas muestras
+  // para mostrar una por fila sin amontonarse, así que se muestran
+  // espaciadas parejo en vez de una por muestra.
   const half = samples / 2;
+  const MAX_FREQ_LABELS = 20;
+  const labelStep = samples > 0 ? Math.max(1, Math.ceil(samples / MAX_FREQ_LABELS)) : 1;
   const freqLabels =
     centerHz != null && samples > 0
-      ? Array.from({ length: samples }, (_, i) => ((centerHz + (i - half) * stepHz) / 1e6).toFixed(5))
+      ? Array.from({ length: Math.ceil(samples / labelStep) }, (_, j) => {
+          const i = j * labelStep;
+          return ((centerHz + (i - half) * stepHz) / 1e6).toFixed(5);
+        })
       : [];
 
   return (
@@ -105,22 +132,23 @@ function BandScope({ puerto, onVolver }) {
         <button className={'button1'} onClick={() => enviar('nullbandscope_off')}>
           Detener
         </button>
-        <button className={'button1'} onClick={() => enviar('nullbandscope_span_do')}>
-          Límite -
-        </button>
-        <button className={'button1'} onClick={() => enviar('nullbandscope_span_up')}>
-          Límite +
-        </button>
         <button className={'button1'} onClick={() => enviar('nullbandscope_step_do')}>
           Salto -
         </button>
         <button className={'button1'} onClick={() => enviar('nullbandscope_step_up')}>
           Salto +
         </button>
+        <button className={'button1'} onClick={() => enviar('nullbandscope_width_do')}>
+          Ancho -
+        </button>
+        <button className={'button1'} onClick={() => enviar('nullbandscope_width_up')}>
+          Ancho +
+        </button>
       </div>
       <p>
         {active ? 'Activo' : 'Detenido'}
         {spanKhz != null ? ` · ±${spanKhz} kHz · paso ${stepHz / 1000} kHz` : ''}
+        {segments > 1 ? ` · ${segments} segmentos` : ' · 1 segmento'}
       </p>
       <p style={{ fontSize: '8pt', color: 'gray' }}>
         seq: {lastSeq} · filas dibujadas: {rowsDrawn}
@@ -134,13 +162,14 @@ function BandScope({ puerto, onVolver }) {
             width: '38pt',
             fontSize: '6pt',
             fontFamily: 'monospace',
+            fontWeight: 'bold',
             color: 'gray',
             textAlign: 'right',
             paddingRight: '2px',
           }}
         >
           {freqLabels.map((label, i) => (
-            <div key={i}>{label}</div>
+            <div key={i} style={{ transform: 'scale(1.5, 2)' }}>{label}</div>
           ))}
         </div>
         <canvas
