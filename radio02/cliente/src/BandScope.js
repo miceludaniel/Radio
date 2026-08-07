@@ -1,17 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
-// Cada nivel se mapea a un solo tono (amarillo), variando el brillo: nivel 0
-// -> amarillo al 0% (negro), nivel 100 y para arriba -> amarillo pleno (así
-// las señales reales, casi siempre débiles dentro del rango 0-255, se ven
-// en vez de quedar todas cerca del negro).
-// Por debajo del umbral de squelch, negro en vez del gradiente.
+// Cada nivel se mapea a un solo tono (amarillo), variando el brillo: al
+// nivel del squelch, amarillo al 0% (negro), y crece hasta amarillo pleno
+// justo al llegar al nivel 100 (de ahí en más se queda en amarillo pleno).
+// La rampa arranca en el squelch en vez de en 0 absoluto para que la
+// transición sea gradual sea cual sea el squelch elegido, en vez de saltar
+// de golpe a un brillo ya alto apenas se cruza el umbral.
 const LEVEL_FULL_YELLOW = 100;
 function levelToColor(level, squelch) {
   if (level < squelch) {
     return '#000';
   }
-  const t = Math.max(0, Math.min(LEVEL_FULL_YELLOW, level)) / LEVEL_FULL_YELLOW;
+  const range = Math.max(1, LEVEL_FULL_YELLOW - squelch);
+  const t = Math.max(0, Math.min(range, level - squelch)) / range;
   return `hsl(60, 100%, ${t * 50}%)`;
 }
 
