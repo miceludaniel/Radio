@@ -6,20 +6,23 @@ import axios from 'axios';
 // a costa de mostrar menos historial en el mismo ancho de canvas.
 const SWEEP_WIDTH_PX = 4;
 
-// Cada nivel se mapea a un solo tono (blanco), variando el brillo: al nivel
-// del squelch, blanco al 0% (negro), y crece hasta blanco pleno justo al
-// llegar al nivel 100 (de ahí en más se queda en blanco pleno). La rampa
-// arranca en el squelch en vez de en 0 absoluto para que la transición sea
-// gradual sea cual sea el squelch elegido, en vez de saltar de golpe a un
-// brillo ya alto apenas se cruza el umbral.
+// Cada nivel (0-255, el rango real que manda el radio) se mapea a un solo
+// tono (blanco): en el squelch, negro (0%), y crece lineal hasta blanco
+// pleno en el nivel 100 (de ahí en más se queda en blanco pleno, aunque
+// el nivel real siga subiendo hasta 255). Por debajo del squelch, negro
+// sin importar el nivel.
 const LEVEL_FULL_WHITE = 100;
-function levelToColor(level, squelch) {
+// intensity multiplica el brillo antes de tocar el techo (100%), a modo de
+// ganancia manual: sirve para que señales débiles se vean más blancas sin
+// tocar el squelch.
+function levelToColor(level, squelch, intensity) {
   if (level < squelch) {
     return '#000';
   }
   const range = Math.max(1, LEVEL_FULL_WHITE - squelch);
   const t = Math.max(0, Math.min(range, level - squelch)) / range;
-  return `hsl(0, 0%, ${t * 100}%)`;
+  const boosted = Math.min(1, t * intensity);
+  return `hsl(0, 0%, ${boosted * 100}%)`;
 }
 
 // Cada segmento del bandscope junta 32 muestras (16 "de abajo", paquete
@@ -48,6 +51,11 @@ function BandScope({ puerto, onVolver }) {
   const sinceRef = useRef(0);
   const samplesRef = useRef(0);
   const requestSeqRef = useRef(0);
+  // refresh() se registra una sola vez en el setInterval (ver useEffect más
+  // abajo) y queda con ese closure para siempre, así que no ve actualizarse
+  // el estado de React en llamadas futuras — de ahí el ref, para que el
+  // deslizador de intensidad sí se refleje en los próximos barridos.
+  const intensityRef = useRef(1);
 
   const [active, setActive] = useState(false);
   const [spanKhz, setSpanKhz] = useState(null);
@@ -58,6 +66,7 @@ function BandScope({ puerto, onVolver }) {
   const [centerHz, setCenterHz] = useState(null);
   const [lastSeq, setLastSeq] = useState(0);
   const [rowsDrawn, setRowsDrawn] = useState(0);
+  const [intensity, setIntensity] = useState(1);
 
   const refresh = () => {
     // Con polling cada 400ms + un pedido extra al toque de cada botón, dos
@@ -105,7 +114,7 @@ function BandScope({ puerto, onVolver }) {
           // SWEEP_WIDTH_PX columnas en vez de 1, para agrandarla.
           ctx.drawImage(canvas, 0, 0, w - SWEEP_WIDTH_PX, h, SWEEP_WIDTH_PX, 0, w - SWEEP_WIDTH_PX, h);
           row.levels.forEach((level, freqIndex) => {
-            ctx.fillStyle = levelToColor(level, sq);
+            ctx.fillStyle = levelToColor(level, sq, intensityRef.current);
             ctx.fillRect(0, freqIndex, SWEEP_WIDTH_PX, 1);
           });
         });
@@ -144,6 +153,8 @@ function BandScope({ puerto, onVolver }) {
     setRowsDrawn(0);
     enviar('nullbandscope_on');
   };
+
+  intensityRef.current = intensity;
 
   // Cada fila (muestra de frecuencia) del waterfall se dibuja siempre a la
   // misma altura en píxeles, sin importar cuántas filas haya — con más
@@ -215,6 +226,19 @@ function BandScope({ puerto, onVolver }) {
       <p style={{ fontSize: '8pt', color: 'gray' }}>
         seq: {lastSeq} · filas dibujadas: {rowsDrawn}
       </p>
+      <div style={{ width: '90%', display: 'flex', alignItems: 'center', gap: '6px', margin: '2px 0 6px' }}>
+        <span style={{ fontSize: '8pt', color: 'gray' }}>Intensidad</span>
+        <input
+          type="range"
+          min={1}
+          max={5}
+          step={0.1}
+          value={intensity}
+          onChange={(e) => setIntensity(Number(e.target.value))}
+          style={{ flex: 1 }}
+        />
+        <span style={{ fontSize: '8pt', color: 'gray', width: '28px', textAlign: 'right' }}>{intensity.toFixed(1)}x</span>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, width: '90%', overflowY: 'auto' }}>
         <div style={{ position: 'relative', width: '45pt', height: totalHeightPx, flexShrink: 0 }}>
           {rowLabels.map(({ i, value }) => (
