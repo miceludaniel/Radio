@@ -1,20 +1,46 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
-// Cada nivel se mapea a un solo tono (amarillo), variando el brillo: al
-// nivel del squelch, amarillo al 0% (negro), y crece hasta amarillo pleno
-// justo al llegar al nivel 100 (de ahí en más se queda en amarillo pleno).
-// La rampa arranca en el squelch en vez de en 0 absoluto para que la
-// transición sea gradual sea cual sea el squelch elegido, en vez de saltar
-// de golpe a un brillo ya alto apenas se cruza el umbral.
-const LEVEL_FULL_YELLOW = 100;
+// Ancho (en píxeles del canvas) de cada pasada/barrido en el eje horizontal
+// (tiempo). Antes cada pasada ocupaba 1px; a 4 se ve 4 veces más grande,
+// a costa de mostrar menos historial en el mismo ancho de canvas.
+const SWEEP_WIDTH_PX = 4;
+
+// Cada nivel se mapea a un solo tono (blanco), variando el brillo: al nivel
+// del squelch, blanco al 0% (negro), y crece hasta blanco pleno justo al
+// llegar al nivel 100 (de ahí en más se queda en blanco pleno). La rampa
+// arranca en el squelch en vez de en 0 absoluto para que la transición sea
+// gradual sea cual sea el squelch elegido, en vez de saltar de golpe a un
+// brillo ya alto apenas se cruza el umbral.
+const LEVEL_FULL_WHITE = 100;
 function levelToColor(level, squelch) {
   if (level < squelch) {
     return '#000';
   }
-  const range = Math.max(1, LEVEL_FULL_YELLOW - squelch);
+  const range = Math.max(1, LEVEL_FULL_WHITE - squelch);
   const t = Math.max(0, Math.min(range, level - squelch)) / range;
-  return `hsl(60, 100%, ${t * 50}%)`;
+  return `hsl(0, 0%, ${t * 100}%)`;
+}
+
+// Cada segmento del bandscope junta 32 muestras (16 "de abajo", paquete
+// NE170, + 16 "de arriba", paquete NE180 — ver servidor/index.js,
+// bandscopeComputeHalves). Comparado contra una señal real, el bloque "de
+// abajo" calza bien, pero TODO el bloque "de arriba" aparece corrido un
+// paso hacia arriba: la primera muestra de NE180, que la documentación dice
+// que está "en la frecuencia central", en la práctica repite la frecuencia
+// del final del bloque de abajo en vez de ser una muestra nueva. Se corrige
+// restando un paso extra a toda la mitad "de arriba" de cada segmento.
+const SAMPLES_PER_SEGMENT = 32;
+const SEGMENT_HALF = SAMPLES_PER_SEGMENT / 2;
+function rowFrequencyHz(i, centerHz, stepHz, samples) {
+  const segIndex = Math.floor(i / SAMPLES_PER_SEGMENT);
+  const withinSeg = i % SAMPLES_PER_SEGMENT;
+  const totalSegments = samples / SAMPLES_PER_SEGMENT;
+  const segWidthHz = SAMPLES_PER_SEGMENT * stepHz;
+  const totalWidthHz = totalSegments * segWidthHz;
+  const segCenterHz = centerHz - totalWidthHz / 2 + segIndex * segWidthHz + segWidthHz / 2;
+  const offsetSteps = withinSeg < SEGMENT_HALF ? withinSeg - SEGMENT_HALF : withinSeg - SEGMENT_HALF - 1;
+  return segCenterHz + offsetSteps * stepHz;
 }
 
 function BandScope({ puerto, onVolver }) {
@@ -75,11 +101,12 @@ function BandScope({ puerto, onVolver }) {
         rows.forEach((row) => {
           // Frecuencia vertical (más alta abajo, freqIndex creciente) y
           // tiempo horizontal: cada barrido nuevo entra por la izquierda
-          // y empuja el historial hacia la derecha.
-          ctx.drawImage(canvas, 0, 0, w - 1, h, 1, 0, w - 1, h);
+          // y empuja el historial hacia la derecha. Cada pasada ocupa
+          // SWEEP_WIDTH_PX columnas en vez de 1, para agrandarla.
+          ctx.drawImage(canvas, 0, 0, w - SWEEP_WIDTH_PX, h, SWEEP_WIDTH_PX, 0, w - SWEEP_WIDTH_PX, h);
           row.levels.forEach((level, freqIndex) => {
             ctx.fillStyle = levelToColor(level, sq);
-            ctx.fillRect(0, freqIndex, 1, 1);
+            ctx.fillRect(0, freqIndex, SWEEP_WIDTH_PX, 1);
           });
         });
         setRowsDrawn((n) => n + rows.length);
@@ -118,18 +145,25 @@ function BandScope({ puerto, onVolver }) {
     enviar('nullbandscope_on');
   };
 
-  // Frecuencia de cada fila del eje vertical (freqIndex 0 = más baja, arriba).
-  // Siempre 16 etiquetas repartidas a igual distancia entre sí, desde la
-  // primera fila hasta la última, en vez de una por muestra.
-  const half = samples / 2;
-  const NUM_FREQ_LABELS = 16;
-  const freqLabels = [];
+  // Cada fila (muestra de frecuencia) del waterfall se dibuja siempre a la
+  // misma altura en píxeles, sin importar cuántas filas haya — con más
+  // muestras el gráfico entero es más alto y se scrollea, en vez de achicar
+  // las filas para que todas entren en un contenedor de altura fija. Así la
+  // posición de cada etiqueta es una cuenta exacta en píxeles (fila * alto),
+  // sin porcentajes ni transforms para hacerla calzar.
+  const ROW_HEIGHT_PX = 16;
+  // Paso entre etiquetas mostradas para que no se amontone el texto: el
+  // mínimo de filas necesarias para dejar un renglón de aire entre una
+  // etiqueta y la siguiente.
+  const MIN_LABEL_SPACING_PX = 14;
+  const labelStep = samples > 0 ? Math.max(1, Math.ceil(MIN_LABEL_SPACING_PX / ROW_HEIGHT_PX)) : 1;
+  const rowLabels = [];
   if (centerHz != null && samples > 0) {
-    for (let j = 0; j < NUM_FREQ_LABELS; j += 1) {
-      const i = samples > 1 ? Math.round((j * (samples - 1)) / (NUM_FREQ_LABELS - 1)) : 0;
-      freqLabels.push({ j, value: ((centerHz + (i - half) * stepHz) / 1e6).toFixed(5) });
+    for (let i = 0; i < samples; i += labelStep) {
+      rowLabels.push({ i, value: (rowFrequencyHz(i, centerHz, stepHz, samples) / 1e6).toFixed(5) });
     }
   }
+  const totalHeightPx = samples * ROW_HEIGHT_PX;
 
   return (
     <div
@@ -181,44 +215,55 @@ function BandScope({ puerto, onVolver }) {
       <p style={{ fontSize: '8pt', color: 'gray' }}>
         seq: {lastSeq} · filas dibujadas: {rowsDrawn}
       </p>
-      <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, width: '90%' }}>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            // space-between (no space-around) deja la primera etiqueta
-            // pegada arriba y la última pegada abajo, sin espacio extra en
-            // los bordes, y reparte el resto del alto en partes iguales
-            // entre las demás: la cabeza de la primera calza con la cabeza
-            // del recuadro, el pie de la última con el pie del recuadro, y
-            // la distancia entre las 16 es la misma en todos los tramos.
-            justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            width: '40pt',
-            fontSize: '6pt',
-            fontFamily: 'monospace',
-            fontWeight: 'bold',
-            color: 'gray',
-            textAlign: 'right',
-            paddingRight: '2px',
-          }}
-        >
-          {freqLabels.map(({ j, value }) => (
-            <div key={j} style={{ width: 'fit-content', transform: 'scale(1.5, 2)', transformOrigin: 'right' }}>{value}</div>
+      <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, width: '90%', overflowY: 'auto' }}>
+        <div style={{ position: 'relative', width: '45pt', height: totalHeightPx, flexShrink: 0 }}>
+          {rowLabels.map(({ i, value }) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                top: i * ROW_HEIGHT_PX - 8,
+                left: '2px',
+                transform: 'translateY(-50%)',
+                fontSize: '7pt',
+                fontFamily: 'monospace',
+                fontWeight: 'bold',
+                color: 'cyan',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {value}
+            </div>
           ))}
         </div>
-        <canvas
-          ref={canvasRef}
-          width={200}
-          height={20}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            imageRendering: 'pixelated',
-            backgroundColor: '#000',
-            border: '1px solid gray',
-          }}
-        />
+        <div style={{ position: 'relative', flex: 1, height: totalHeightPx }}>
+          <canvas
+            ref={canvasRef}
+            width={200}
+            height={20}
+            style={{
+              width: '100%',
+              height: '100%',
+              imageRendering: 'pixelated',
+              backgroundColor: '#000',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              pointerEvents: 'none',
+              // Una línea de 1px al borde superior de cada fila, repetida
+              // cada ROW_HEIGHT_PX: separa visualmente una fila de la
+              // siguiente sin tener que dibujar un div por fila.
+              backgroundImage: `repeating-linear-gradient(to bottom, red 0px, red 1px, transparent 1px, transparent ${ROW_HEIGHT_PX}px)`,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
