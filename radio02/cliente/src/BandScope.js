@@ -187,7 +187,8 @@ function BandScope({ puerto, onVolver }) {
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-around',
-            width: '38pt',
+            alignItems: 'flex-end',
+            width: '40pt',
             fontSize: '6pt',
             fontFamily: 'monospace',
             fontWeight: 'bold',
@@ -197,7 +198,7 @@ function BandScope({ puerto, onVolver }) {
           }}
         >
           {freqLabels.map((label, i) => (
-            <div key={i} style={{ transform: 'scale(1.5, 2)' }}>{label}</div>
+            <div key={i} style={{ width: 'fit-content', transform: 'scale(1.5, 2)', transformOrigin: 'right' }}>{label}</div>
           ))}
         </div>
         <canvas
