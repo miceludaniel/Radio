@@ -1428,6 +1428,9 @@ case 'ancho_up-1':{
        console.error('Error al escribir en el archivo:', err);
         return;
       }});
+    // Arranca un barrido nuevo: borra el historial de filas para no
+    // mezclar en pantalla datos de un barrido anterior con el que empieza.
+    bandscopeRows = [];
     bandscopeStart();
     datosDisplay();
     break; }

@@ -95,6 +95,18 @@ function BandScope({ puerto, onVolver }) {
     return () => clearInterval(intervalId);
   }, []);
 
+  // Al disparar, limpiar el canvas al toque (el servidor también borra su
+  // historial de filas) para no mezclar en pantalla datos de un barrido
+  // anterior con el que arranca.
+  const disparar = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setRowsDrawn(0);
+    enviar('nullbandscope_on');
+  };
+
   // Frecuencia de cada fila del eje vertical (freqIndex 0 = más baja, arriba).
   // Como máximo 20 etiquetas: con muchos segmentos hay demasiadas muestras
   // para mostrar una por fila sin amontonarse, así que se muestran
@@ -126,7 +138,7 @@ function BandScope({ puerto, onVolver }) {
         <button className={'button1'} onClick={onVolver}>
           Controles
         </button>
-        <button className={'button1'} onClick={() => enviar('nullbandscope_on')}>
+        <button className={'button1'} onClick={disparar}>
           Disparar
         </button>
         <button className={'button1'} onClick={() => enviar('nullbandscope_off')}>
