@@ -2,7 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
 // Cada nivel (0-255) se mapea a un color tipo "waterfall": azul (débil) -> rojo (fuerte).
-function levelToColor(level) {
+// Por debajo del umbral de squelch, negro en vez del gradiente.
+function levelToColor(level, squelch) {
+  if (level < squelch) {
+    return '#000';
+  }
   const t = Math.max(0, Math.min(255, level)) / 255;
   const hue = 240 - t * 240;
   return `hsl(${hue}, 100%, ${20 + t * 30}%)`;
@@ -19,6 +23,7 @@ function BandScope({ puerto, onVolver }) {
   const [stepHz, setStepHz] = useState(null);
   const [samples, setSamples] = useState(0);
   const [segments, setSegments] = useState(1);
+  const [squelch, setSquelch] = useState(0);
   const [centerHz, setCenterHz] = useState(null);
   const [lastSeq, setLastSeq] = useState(0);
   const [rowsDrawn, setRowsDrawn] = useState(0);
@@ -36,13 +41,14 @@ function BandScope({ puerto, onVolver }) {
         if (reqId !== requestSeqRef.current) {
           return;
         }
-        const { rows, lastSeq: seq, active: activeNow, spanKhz: sk, stepHz: sh, samples: sampleCount, segments: segs, centerHz: chz } = response.data;
+        const { rows, lastSeq: seq, active: activeNow, spanKhz: sk, stepHz: sh, samples: sampleCount, segments: segs, squelch: sq, centerHz: chz } = response.data;
         sinceRef.current = seq;
         setActive(activeNow);
         setSpanKhz(sk);
         setStepHz(sh);
         setSamples(sampleCount);
         setSegments(segs);
+        setSquelch(sq);
         setCenterHz(chz);
         setLastSeq(seq);
 
@@ -67,7 +73,7 @@ function BandScope({ puerto, onVolver }) {
           // y empuja el historial hacia la derecha.
           ctx.drawImage(canvas, 0, 0, w - 1, h, 1, 0, w - 1, h);
           row.levels.forEach((level, freqIndex) => {
-            ctx.fillStyle = levelToColor(level);
+            ctx.fillStyle = levelToColor(level, sq);
             ctx.fillRect(0, freqIndex, 1, 1);
           });
         });
@@ -156,11 +162,18 @@ function BandScope({ puerto, onVolver }) {
         <button className={'button1'} onClick={() => enviar('nullbandscope_width_up')}>
           Ancho +
         </button>
+        <button className={'button1'} onClick={() => enviar('nullbandscope_squelch_do')}>
+          Squelch -
+        </button>
+        <button className={'button1'} onClick={() => enviar('nullbandscope_squelch_up')}>
+          Squelch +
+        </button>
       </div>
       <p>
         {active ? 'Activo' : 'Detenido'}
         {spanKhz != null ? ` · ±${spanKhz} kHz · paso ${stepHz / 1000} kHz` : ''}
         {segments > 1 ? ` · ${segments} segmentos` : ' · 1 segmento'}
+        {` · squelch ${squelch}`}
       </p>
       <p style={{ fontSize: '8pt', color: 'gray' }}>
         seq: {lastSeq} · filas dibujadas: {rowsDrawn}

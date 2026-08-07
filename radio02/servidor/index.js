@@ -52,6 +52,23 @@ const BANDSCOPE_MAX_SEGMENTS = 16;
 const BANDSCOPE_SEGMENT_SETTLE_MS = 300;
 const rutaBandscopeWidth = '/Users/danielMac/ws/workspace/radio02/config/bandscopeWidth.json';
 
+// "Squelch -/+" del bandscope: umbral (0-255, de a uno) para el color del
+// waterfall — las muestras con nivel por debajo se dibujan en negro en vez
+// del gradiente normal. Es un filtro puramente visual sobre los niveles ya
+// capturados; no manda ningún comando al receptor (distinto del squelch de
+// audio real, config/squelch.json / setSquelch(), que es otra cosa).
+const BANDSCOPE_SQUELCH_MIN = 0;
+const BANDSCOPE_SQUELCH_MAX = 255;
+const rutaBandscopeSquelch = '/Users/danielMac/ws/workspace/radio02/config/bandscopeSquelch.json';
+
+function bandscopeReadSquelch() {
+  const n = Math.round(Number(fs.readFileSync(rutaBandscopeSquelch, 'utf-8')));
+  if (Number.isNaN(n)) {
+    return BANDSCOPE_SQUELCH_MIN;
+  }
+  return Math.max(BANDSCOPE_SQUELCH_MIN, Math.min(BANDSCOPE_SQUELCH_MAX, n));
+}
+
 // Paso de sintonía (el mismo índice 1-22 que usan los botones "Salto -"/"Salto +"
 // en Controles), en Hz. Para el bandscope sólo son válidos los pasos entre
 // 0.1 y 100 KHz (índices 5 a 18): por abajo de eso barrer no aporta nada
@@ -1497,6 +1514,26 @@ case 'ancho_up-1':{
     datosDisplay();
     break; }
 //************************************************************** */
+  case 'bandscope_squelch_up': {
+    const squelch = Math.min(bandscopeReadSquelch() + 1, BANDSCOPE_SQUELCH_MAX);
+    fs.writeFileSync(rutaBandscopeSquelch, String(squelch), 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    datosDisplay();
+    break; }
+//************************************************************** */
+  case 'bandscope_squelch_do': {
+    const squelch = Math.max(bandscopeReadSquelch() - 1, BANDSCOPE_SQUELCH_MIN);
+    fs.writeFileSync(rutaBandscopeSquelch, String(squelch), 'utf8', (err) => {
+      if (err) {
+       console.error('Error al escribir en el archivo:', err);
+        return;
+      }});
+    datosDisplay();
+    break; }
+//************************************************************** */
   default: {
     const rutagrados = '/Users/danielMac/ws/workspace/radio02/config/grados.json';
     let grados ='';
@@ -1603,6 +1640,7 @@ app.get('/bandscope-rows', (req, res) => {
     stepHz,
     samples,
     segments,
+    squelch: bandscopeReadSquelch(),
     centerHz,
   });
 });
