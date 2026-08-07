@@ -1,15 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
-// Cada nivel (0-255) se mapea a un color tipo "waterfall": azul (débil) -> rojo (fuerte).
+// Cada nivel se mapea a un solo tono (amarillo), variando el brillo: nivel 0
+// -> amarillo al 0% (negro), nivel 100 y para arriba -> amarillo pleno (así
+// las señales reales, casi siempre débiles dentro del rango 0-255, se ven
+// en vez de quedar todas cerca del negro).
 // Por debajo del umbral de squelch, negro en vez del gradiente.
+const LEVEL_FULL_YELLOW = 100;
 function levelToColor(level, squelch) {
   if (level < squelch) {
     return '#000';
   }
-  const t = Math.max(0, Math.min(255, level)) / 255;
-  const hue = 240 - t * 240;
-  return `hsl(${hue}, 100%, ${20 + t * 30}%)`;
+  const t = Math.max(0, Math.min(LEVEL_FULL_YELLOW, level)) / LEVEL_FULL_YELLOW;
+  return `hsl(60, 100%, ${t * 50}%)`;
 }
 
 function BandScope({ puerto, onVolver }) {
