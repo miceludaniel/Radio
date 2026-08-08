@@ -7,11 +7,10 @@ import axios from 'axios';
 const SWEEP_WIDTH_PX = 4;
 
 // Cada nivel (0-255, el rango real que manda el radio) se mapea a un solo
-// tono (blanco): en el squelch, negro (0%), y crece lineal hasta blanco
-// pleno en el nivel 100 (de ahí en más se queda en blanco pleno, aunque
-// el nivel real siga subiendo hasta 255). Por debajo del squelch, negro
-// sin importar el nivel.
-const LEVEL_FULL_WHITE = 100;
+// tono (blanco), proporcional al nivel real dentro de ese rango: en el
+// squelch, negro (0%), creciendo lineal hasta blanco pleno (100%) en 255.
+// Por debajo del squelch, negro sin importar el nivel.
+const LEVEL_MAX = 255;
 // intensity multiplica el brillo antes de tocar el techo (100%), a modo de
 // ganancia manual: sirve para que señales débiles se vean más blancas sin
 // tocar el squelch.
@@ -19,7 +18,7 @@ function levelToColor(level, squelch, intensity) {
   if (level < squelch) {
     return '#000';
   }
-  const range = Math.max(1, LEVEL_FULL_WHITE - squelch);
+  const range = Math.max(1, LEVEL_MAX - squelch);
   const t = Math.max(0, Math.min(range, level - squelch)) / range;
   const boosted = Math.min(1, t * intensity);
   return `hsl(0, 0%, ${boosted * 100}%)`;
@@ -231,7 +230,7 @@ function BandScope({ puerto, onVolver }) {
         <input
           type="range"
           min={1}
-          max={5}
+          max={20}
           step={0.1}
           value={intensity}
           onChange={(e) => setIntensity(Number(e.target.value))}
