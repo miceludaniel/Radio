@@ -7,19 +7,16 @@ import axios from 'axios';
 const SWEEP_WIDTH_PX = 4;
 
 // Cada nivel (0-255, el rango real que manda el radio) se mapea a un solo
-// tono (blanco), proporcional al nivel real dentro de ese rango: en el
-// squelch, negro (0%), creciendo lineal hasta blanco pleno (100%) en 255.
-// Por debajo del squelch, negro sin importar el nivel.
+// tono (blanco), proporcional al nivel real dentro de ese rango completo
+// (0%=negro, 255=blanco pleno) — sin restar el squelch, para no estirar la
+// escala. El squelch sólo decide qué filas se dibujan (ver más abajo, donde
+// se filtran antes de llamar a esta función), no cómo se calcula el color.
 const LEVEL_MAX = 255;
 // intensity multiplica el brillo antes de tocar el techo (100%), a modo de
 // ganancia manual: sirve para que señales débiles se vean más blancas sin
 // tocar el squelch.
-function levelToColor(level, squelch, intensity) {
-  if (level < squelch) {
-    return '#000';
-  }
-  const range = Math.max(1, LEVEL_MAX - squelch);
-  const t = Math.max(0, Math.min(range, level - squelch)) / range;
+function levelToColor(level, intensity) {
+  const t = Math.max(0, Math.min(LEVEL_MAX, level)) / LEVEL_MAX;
   const boosted = Math.min(1, t * intensity);
   return `hsl(0, 0%, ${boosted * 100}%)`;
 }
@@ -113,7 +110,10 @@ function BandScope({ puerto, onVolver }) {
           // SWEEP_WIDTH_PX columnas en vez de 1, para agrandarla.
           ctx.drawImage(canvas, 0, 0, w - SWEEP_WIDTH_PX, h, SWEEP_WIDTH_PX, 0, w - SWEEP_WIDTH_PX, h);
           row.levels.forEach((level, freqIndex) => {
-            ctx.fillStyle = levelToColor(level, sq, intensityRef.current);
+            if (level < sq) {
+              return;
+            }
+            ctx.fillStyle = levelToColor(level, intensityRef.current);
             ctx.fillRect(0, freqIndex, SWEEP_WIDTH_PX, 1);
           });
         });
