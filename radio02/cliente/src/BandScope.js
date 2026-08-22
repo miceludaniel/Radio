@@ -1,24 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
-// Ancho (en píxeles del canvas) de cada pasada/barrido en el eje horizontal
-// (tiempo). Antes cada pasada ocupaba 1px; a 4 se ve 4 veces más grande,
-// a costa de mostrar menos historial en el mismo ancho de canvas.
-const SWEEP_WIDTH_PX = 4;
-
-// Cada nivel (0-255, el rango real que manda el radio) se mapea a un solo
-// tono (blanco), proporcional al nivel real dentro de ese rango completo
-// (0%=negro, 255=blanco pleno) — sin restar el squelch, para no estirar la
-// escala. El squelch sólo decide qué filas se dibujan (ver más abajo, donde
-// se filtran antes de llamar a esta función), no cómo se calcula el color.
+// Cada nivel (0-255, el rango real que manda el radio) se mapea al largo de
+// la barra de esa frecuencia, proporcional al nivel real dentro de ese rango
+// completo (0=sin barra, 255=barra entera) — sin restar el squelch, para no
+// estirar la escala. El squelch sólo decide qué filas se dibujan (se
+// filtran antes de llamar a esta función), no el largo de la barra.
 const LEVEL_MAX = 255;
-// intensity multiplica el brillo antes de tocar el techo (100%), a modo de
-// ganancia manual: sirve para que señales débiles se vean más blancas sin
-// tocar el squelch.
-function levelToColor(level, intensity) {
+// intensity multiplica el largo antes de tocar el techo (100% del ancho), a
+// modo de ganancia manual: sirve para que señales débiles se vean más largas
+// sin tocar el squelch.
+function levelToBarWidth(level, intensity, canvasWidth) {
   const t = Math.max(0, Math.min(LEVEL_MAX, level)) / LEVEL_MAX;
   const boosted = Math.min(1, t * intensity);
-  return `hsl(0, 0%, ${boosted * 100}%)`;
+  return boosted * canvasWidth;
 }
 
 // Cada segmento del bandscope junta 32 muestras (16 "de abajo", paquete
@@ -103,19 +98,19 @@ function BandScope({ puerto, onVolver }) {
         const w = canvas.width;
         const h = canvas.height;
 
-        rows.forEach((row) => {
-          // Frecuencia vertical (más alta abajo, freqIndex creciente) y
-          // tiempo horizontal: cada barrido nuevo entra por la izquierda
-          // y empuja el historial hacia la derecha. Cada pasada ocupa
-          // SWEEP_WIDTH_PX columnas en vez de 1, para agrandarla.
-          ctx.drawImage(canvas, 0, 0, w - SWEEP_WIDTH_PX, h, SWEEP_WIDTH_PX, 0, w - SWEEP_WIDTH_PX, h);
-          row.levels.forEach((level, freqIndex) => {
-            if (level < sq) {
-              return;
-            }
-            ctx.fillStyle = levelToColor(level, intensityRef.current);
-            ctx.fillRect(0, freqIndex, SWEEP_WIDTH_PX, 1);
-          });
+        // Cada fila (frecuencia) es una barra que crece de izquierda a
+        // derecha según su nivel — no un historial en el tiempo, así que
+        // sólo importa la última pasada del lote: se redibuja entera cada
+        // vez en vez de acumularse.
+        const lastRow = rows[rows.length - 1];
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#fff';
+        lastRow.levels.forEach((level, freqIndex) => {
+          if (level < sq) {
+            return;
+          }
+          const barWidth = levelToBarWidth(level, intensityRef.current, w);
+          ctx.fillRect(0, freqIndex, barWidth, 1);
         });
         setRowsDrawn((n) => n + rows.length);
       })
