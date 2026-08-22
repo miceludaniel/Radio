@@ -211,6 +211,7 @@ function BandScope({ puerto, onVolver }) {
           Squelch +
         </button>
       </div>
+      <p style={{ color: 'red', fontWeight: 'bold' }}>NO FUNCIONA EN SSB</p>
       <p>
         {active ? 'Activo' : 'Detenido'}
         {spanKhz != null ? ` · ±${spanKhz} kHz · paso ${stepHz / 1000} kHz` : ''}
